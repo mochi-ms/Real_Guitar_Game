@@ -1,19 +1,24 @@
 #include "AcousticChillCharacter.h"
 
+#include "Blueprint/UserWidget.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "GuitarPerformanceHUDWidget.h"
+#include "GuitarPerformerActor.h"
 #include "GuitarScoreSubsystem.h"
+#include "GuitarSongLibrarySubsystem.h"
 #include "InteractableSeatActor.h"
 
 AAcousticChillCharacter::AAcousticChillCharacter()
 {
-    PrimaryActorTick.bCanEverTick = false;
+    PrimaryActorTick.bCanEverTick = true;
 
     FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
     FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
@@ -25,7 +30,7 @@ void AAcousticChillCharacter::BeginPlay()
 {
     Super::BeginPlay();
 
-    if (const APlayerController* PC = Cast<APlayerController>(GetController()))
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
         if (UEnhancedInputLocalPlayerSubsystem* Sub =
                 ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
@@ -35,6 +40,37 @@ void AAcousticChillCharacter::BeginPlay()
                 Sub->AddMappingContext(DefaultMappingContext, 0);
             }
         }
+        if (PerformanceHUDClass)
+        {
+            HUDWidget = CreateWidget<UGuitarPerformanceHUDWidget>(PC, PerformanceHUDClass);
+            if (HUDWidget)
+            {
+                HUDWidget->AddToViewport();
+            }
+        }
+    }
+}
+
+void AAcousticChillCharacter::Tick(float DeltaTime)
+{
+    Super::Tick(DeltaTime);
+
+    if (!HUDWidget)
+    {
+        return;
+    }
+
+    if (ActiveSeat)
+    {
+        HUDWidget->SetInteractionPrompt(true, NSLOCTEXT("GuitarHUD", "StandPrompt", "[E] 자리에서 일어나기 · [C] 카메라 전환"));
+    }
+    else if (const AInteractableSeatActor* LookedSeat = FindLookedAtSeat())
+    {
+        HUDWidget->SetInteractionPrompt(true, LookedSeat->SitPromptText);
+    }
+    else
+    {
+        HUDWidget->SetInteractionPrompt(false, FText::GetEmpty());
     }
 }
 
@@ -59,6 +95,14 @@ void AAcousticChillCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
         if (TogglePlayAction)
         {
             EnhancedInput->BindAction(TogglePlayAction, ETriggerEvent::Started, this, &AAcousticChillCharacter::HandleTogglePlay);
+        }
+        if (CycleCameraAction)
+        {
+            EnhancedInput->BindAction(CycleCameraAction, ETriggerEvent::Started, this, &AAcousticChillCharacter::HandleCycleCamera);
+        }
+        if (NextSongAction)
+        {
+            EnhancedInput->BindAction(NextSongAction, ETriggerEvent::Started, this, &AAcousticChillCharacter::HandleNextSong);
         }
     }
 }
@@ -111,6 +155,30 @@ void AAcousticChillCharacter::HandleTogglePlay()
     }
 }
 
+void AAcousticChillCharacter::HandleCycleCamera()
+{
+    if (!ActiveSeat || !ActiveSeat->LinkedPerformer)
+    {
+        return;
+    }
+    ActiveSeat->LinkedPerformer->CycleCameraAngle();
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        PC->SetViewTargetWithBlend(ActiveSeat->LinkedPerformer, 0.55f, EViewTargetBlendFunction::VTBlend_Cubic);
+    }
+}
+
+void AAcousticChillCharacter::HandleNextSong()
+{
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UGuitarSongLibrarySubsystem* Lib = GI->GetSubsystem<UGuitarSongLibrarySubsystem>())
+        {
+            Lib->PlayNextSong();
+        }
+    }
+}
+
 AInteractableSeatActor* AAcousticChillCharacter::FindLookedAtSeat() const
 {
     const UWorld* World = GetWorld();
@@ -153,6 +221,10 @@ void AAcousticChillCharacter::TryToggleSeat()
         {
             MoveComp->SetMovementMode(MOVE_Walking);
         }
+        if (HUDWidget)
+        {
+            HUDWidget->SetSeatedMode(false, nullptr);
+        }
         return;
     }
 
@@ -165,5 +237,9 @@ void AAcousticChillCharacter::TryToggleSeat()
             MoveComp->DisableMovement();
         }
         Seat->EnterSeat(PC);
+        if (HUDWidget)
+        {
+            HUDWidget->SetSeatedMode(true, Seat->LinkedPerformer);
+        }
     }
 }

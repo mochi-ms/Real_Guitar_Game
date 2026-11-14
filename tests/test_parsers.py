@@ -133,6 +133,37 @@ class TestScoreParsers(unittest.TestCase):
             self.assertEqual(perf.events[0].midi_note, 48)
             self.assertEqual(perf.events[1].right_action, "strum_down")
 
+    def test_guitar_pro_gp5_binary(self) -> None:
+        import guitarpro  # type: ignore[import-untyped]
+
+        song = guitarpro.Song()
+        song.title = "GP5 Test Etude"
+        song.tempo = 88
+        track = song.tracks[0]
+        voice = track.measures[0].voices[0]
+
+        b1 = guitarpro.Beat(voice)
+        n1 = guitarpro.Note(b1, value=3, string=5, type=guitarpro.NoteType.normal)
+        b1.notes.append(n1)
+
+        b2 = guitarpro.Beat(voice)
+        b2.effect.stroke.direction = guitarpro.BeatStrokeDirection.down
+        b2.notes.append(guitarpro.Note(b2, value=2, string=4, type=guitarpro.NoteType.normal))
+        b2.notes.append(guitarpro.Note(b2, value=0, string=3, type=guitarpro.NoteType.normal))
+        b2.notes.append(guitarpro.Note(b2, value=1, string=2, type=guitarpro.NoteType.normal))
+        voice.beats.extend([b1, b2])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            gp5_path = Path(tmp) / "test.gp5"
+            guitarpro.write(song, str(gp5_path))
+            perf = compile_score(gp5_path)
+            self.assertEqual(perf.source_format, "guitar_pro")
+            self.assertEqual(perf.bpm, 88.0)
+            self.assertEqual(len(perf.events), 4)
+            self.assertEqual(perf.events[0].string, 5)
+            self.assertEqual(perf.events[0].fret, 3)
+            self.assertEqual(perf.events[1].right_action, "strum_down")
+
 
 if __name__ == "__main__":
     unittest.main()

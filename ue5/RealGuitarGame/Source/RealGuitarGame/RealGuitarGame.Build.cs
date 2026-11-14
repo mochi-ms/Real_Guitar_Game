@@ -14,7 +14,10 @@ public class RealGuitarGame : ModuleRules
             "InputCore",
             "EnhancedInput",
             "Json",
-            "JsonUtilities"
+            "JsonUtilities",
+            "UMG",
+            "Slate",
+            "SlateCore"
         });
     }
 }

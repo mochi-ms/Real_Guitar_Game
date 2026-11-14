@@ -3,9 +3,12 @@
 #include "Camera/CameraComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "GuitarPerformerActor.h"
 #include "GuitarScoreSubsystem.h"
+#include "GuitarSongLibrarySubsystem.h"
 #include "Misc/Paths.h"
 
 AInteractableSeatActor::AInteractableSeatActor()
@@ -40,7 +43,8 @@ void AInteractableSeatActor::EnterSeat(APlayerController* PC)
         return;
     }
 
-    PC->SetViewTargetWithBlend(this, CameraBlendTime, EViewTargetBlendFunction::VTBlend_Cubic);
+    AActor* CameraTarget = LinkedPerformer ? static_cast<AActor*>(LinkedPerformer) : static_cast<AActor*>(this);
+    PC->SetViewTargetWithBlend(CameraTarget, CameraBlendTime, EViewTargetBlendFunction::VTBlend_Cubic);
 
     if (UWorld* World = GetWorld())
     {
@@ -50,8 +54,32 @@ void AInteractableSeatActor::EnterSeat(APlayerController* PC)
             {
                 const FString FullPath = FPaths::Combine(FPaths::ProjectContentDir(), DefaultScoreRelativePath);
                 ScoreSub->LoadPerformanceFromJsonFile(FullPath);
+                ScoreSub->Play();
             }
-            ScoreSub->Play();
+            else if (ScoreSub->GetLoadedPerformance().Events.IsEmpty())
+            {
+                if (UGameInstance* GI = World->GetGameInstance())
+                {
+                    if (UGuitarSongLibrarySubsystem* Lib = GI->GetSubsystem<UGuitarSongLibrarySubsystem>())
+                    {
+                        if (!Lib->LoadSongByIndex(0, true))
+                        {
+                            // Fallback live balladic progression if no score files exist yet
+                            Lib->GenerateAndPlayCustomChart(
+                                { TEXT("C"), TEXT("G/B"), TEXT("Am7"), TEXT("Fmaj7") },
+                                82.0f,
+                                true,
+                                TEXT("pima_ballad"),
+                                true
+                            );
+                        }
+                    }
+                }
+            }
+            else
+            {
+                ScoreSub->Play();
+            }
         }
     }
 }

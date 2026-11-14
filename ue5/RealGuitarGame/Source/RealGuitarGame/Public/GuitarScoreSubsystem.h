@@ -26,6 +26,9 @@ public:
     bool LoadPerformanceFromJsonFile(const FString& FilePath);
 
     UFUNCTION(BlueprintCallable, Category = "Guitar|Score")
+    void LoadPerformanceData(const FGuitarPerformanceData& InData);
+
+    UFUNCTION(BlueprintCallable, Category = "Guitar|Score")
     void Play();
 
     UFUNCTION(BlueprintCallable, Category = "Guitar|Score")
@@ -47,6 +50,12 @@ public:
     bool IsPlaying() const { return bIsPlaying; }
 
     UFUNCTION(BlueprintPure, Category = "Guitar|Score")
+    bool IsLooping() const { return bLooping; }
+
+    UFUNCTION(BlueprintPure, Category = "Guitar|Score")
+    float GetPlaybackRate() const { return PlaybackRate; }
+
+    UFUNCTION(BlueprintPure, Category = "Guitar|Score")
     float GetCurrentTimeSec() const { return CurrentTimeSec; }
 
     UFUNCTION(BlueprintPure, Category = "Guitar|Score")
@@ -57,6 +66,9 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Guitar|Score")
     bool GetCurrentChord(FGuitarChordSnapshot& OutChord) const;
+
+    UFUNCTION(BlueprintPure, Category = "Guitar|Score")
+    bool GetNextChord(FGuitarChordSnapshot& OutChord) const;
 
     UPROPERTY(BlueprintAssignable, Category = "Guitar|Events")
     FOnGuitarEventTriggered OnGuitarEventTriggered;

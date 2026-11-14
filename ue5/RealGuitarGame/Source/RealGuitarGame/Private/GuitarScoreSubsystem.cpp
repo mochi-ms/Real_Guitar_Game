@@ -171,11 +171,16 @@ bool UGuitarScoreSubsystem::LoadPerformanceFromJsonFile(const FString& FilePath)
         }
     }
 
-    LoadedPerformance = MoveTemp(Data);
+    LoadPerformanceData(Data);
+    return true;
+}
+
+void UGuitarScoreSubsystem::LoadPerformanceData(const FGuitarPerformanceData& InData)
+{
+    LoadedPerformance = InData;
     bHasScore = true;
     SeekTo(0.0f);
     OnScoreLoaded.Broadcast(LoadedPerformance);
-    return true;
 }
 
 void UGuitarScoreSubsystem::Play()
@@ -231,6 +236,17 @@ bool UGuitarScoreSubsystem::GetCurrentChord(FGuitarChordSnapshot& OutChord) cons
     if (LoadedPerformance.Chords.IsValidIndex(CurrentChordIndex))
     {
         OutChord = LoadedPerformance.Chords[CurrentChordIndex];
+        return true;
+    }
+    return false;
+}
+
+bool UGuitarScoreSubsystem::GetNextChord(FGuitarChordSnapshot& OutChord) const
+{
+    const int32 NextIdx = (CurrentChordIndex == INDEX_NONE) ? 0 : (CurrentChordIndex + 1);
+    if (LoadedPerformance.Chords.IsValidIndex(NextIdx))
+    {
+        OutChord = LoadedPerformance.Chords[NextIdx];
         return true;
     }
     return false;

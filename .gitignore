@@ -24,6 +24,7 @@ ue5/*/*.VC.db
 ue5/*/Content/Megascans/
 ue5/*/Content/MetaHumans/
 ue5/*/Content/ExternalAssets/
+ue5/*/Content/Audio/Samples/*.wav
 
 # IDE & OS
 .vscode/

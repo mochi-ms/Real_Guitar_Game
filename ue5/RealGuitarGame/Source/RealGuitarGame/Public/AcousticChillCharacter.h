@@ -7,6 +7,7 @@
 
 class AInteractableSeatActor;
 class UCameraComponent;
+class UGuitarPerformanceHUDWidget;
 class UInputAction;
 class UInputMappingContext;
 
@@ -22,6 +23,7 @@ class REALGUITARGAME_API AAcousticChillCharacter : public ACharacter
 public:
     AAcousticChillCharacter();
 
+    virtual void Tick(float DeltaTime) override;
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
@@ -42,6 +44,15 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
     TObjectPtr<UInputAction> TogglePlayAction;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+    TObjectPtr<UInputAction> CycleCameraAction;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+    TObjectPtr<UInputAction> NextSongAction;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+    TSubclassOf<UGuitarPerformanceHUDWidget> PerformanceHUDClass;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
     float InteractTraceDistance = 260.0f;
 
@@ -59,9 +70,14 @@ private:
     void HandleLook(const FInputActionValue& Value);
     void HandleInteract();
     void HandleTogglePlay();
+    void HandleCycleCamera();
+    void HandleNextSong();
 
     AInteractableSeatActor* FindLookedAtSeat() const;
 
     UPROPERTY(Transient)
     TObjectPtr<AInteractableSeatActor> ActiveSeat;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UGuitarPerformanceHUDWidget> HUDWidget;
 };

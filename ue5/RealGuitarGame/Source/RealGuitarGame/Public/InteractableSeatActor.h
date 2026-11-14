@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "InteractableSeatActor.generated.h"
 
+class AGuitarPerformerActor;
 class UCameraComponent;
 class USphereComponent;
 class UStaticMeshComponent;
@@ -35,12 +36,18 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Seat")
     TObjectPtr<USphereComponent> InteractionRadius;
 
+    UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Seat|Performance")
+    TObjectPtr<AGuitarPerformerActor> LinkedPerformer;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seat|Performance")
     float CameraBlendTime = 0.75f;
 
-    // Optional relative path inside ProjectContentDir, e.g. "Scores/fingerstyle_canon.performance.json"
+    // Optional relative path inside ProjectContentDir, e.g. "Scores/fingerstyle_canon_intro.performance.json"
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seat|Performance")
     FString DefaultScoreRelativePath;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seat|UI")
+    FText SitPromptText = NSLOCTEXT("GuitarHUD", "SitPrompt", "[E] 앉아서 기타 연주 감상하기");
 
     UFUNCTION(BlueprintCallable, Category = "Seat")
     void EnterSeat(APlayerController* PC);

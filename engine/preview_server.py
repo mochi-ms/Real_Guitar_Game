@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -12,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 from engine.audio_synth import synthesize_performance_to_wav
 from engine.compiler import compile_score
+from engine.humanizer import humanize_performance
 from engine.models import GuitarPerformance
 from engine.parsers.chord_chart_parser import (
     FINGERSTYLE_PRESETS,
@@ -22,6 +24,7 @@ from engine.parsers.chord_chart_parser import (
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SAMPLES_DIR = REPO_ROOT / "samples"
 PREVIEW_HTML = REPO_ROOT / "preview" / "index.html"
+GUITAR_GLB = REPO_ROOT / "ue5" / "RealGuitarGame" / "Content" / "Models" / "AcousticGuitar_Reference.glb"
 
 
 def _resolve_sample_path(name: str) -> Path:
@@ -32,7 +35,7 @@ def _resolve_sample_path(name: str) -> Path:
 
 
 class PreviewHandler(BaseHTTPRequestHandler):
-    server_version = "RealGuitarGamePreview/1.0"
+    server_version = "RealGuitarGamePreview/1.1"
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         return
@@ -69,7 +72,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/samples":
-            exts = {".musicxml", ".xml", ".mxl", ".gp", ".gpif", ".mid", ".midi", ".rgchart"}
+            exts = {".musicxml", ".xml", ".mxl", ".gp", ".gpif", ".gp3", ".gp4", ".gp5", ".mid", ".midi", ".rgchart"}
             files = sorted(
                 p.name for p in SAMPLES_DIR.iterdir() if p.is_file() and p.suffix.lower() in exts
             )
@@ -81,7 +84,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
             name = qs.get("file", [""])[0]
             try:
                 sample_path = _resolve_sample_path(name)
-                perf = compile_score(sample_path)
+                perf = humanize_performance(compile_score(sample_path))
                 self._send_json(perf.to_dict())
             except Exception as exc:  # noqa: BLE001
                 self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
@@ -92,7 +95,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
             name = qs.get("file", [""])[0]
             try:
                 sample_path = _resolve_sample_path(name)
-                perf = compile_score(sample_path)
+                perf = humanize_performance(compile_score(sample_path))
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
                     tmp_wav = Path(tf.name)
                 try:
@@ -105,6 +108,10 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+        if parsed.path == "/api/model.glb" and GUITAR_GLB.is_file():
+            self._send_bytes(GUITAR_GLB.read_bytes(), "model/gltf-binary")
+            return
+
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -115,7 +122,32 @@ class PreviewHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/compile-custom":
             try:
                 payload = json.loads(body.decode("utf-8"))
-                perf = parse_chord_chart_data(payload)
+                perf = humanize_performance(parse_chord_chart_data(payload))
+                self._send_json(perf.to_dict())
+            except Exception as exc:  # noqa: BLE001
+                self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if parsed.path == "/api/upload-score":
+            try:
+                payload = json.loads(body.decode("utf-8"))
+                filename = Path(str(payload.get("filename", "score.musicxml"))).name
+                raw_bytes = base64.b64decode(str(payload["content_base64"]))
+                suffix = Path(filename).suffix.lower()
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tf:
+                    tmp_score = Path(tf.name)
+                try:
+                    tmp_score.write_bytes(raw_bytes)
+                    if suffix == ".json":
+                        data = json.loads(raw_bytes.decode("utf-8"))
+                        if "events" in data and "schema_version" in data:
+                            perf = GuitarPerformance.from_dict(data)
+                        else:
+                            perf = humanize_performance(parse_chord_chart_data(data))
+                    else:
+                        perf = humanize_performance(compile_score(tmp_score))
+                finally:
+                    tmp_score.unlink(missing_ok=True)
                 self._send_json(perf.to_dict())
             except Exception as exc:  # noqa: BLE001
                 self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
