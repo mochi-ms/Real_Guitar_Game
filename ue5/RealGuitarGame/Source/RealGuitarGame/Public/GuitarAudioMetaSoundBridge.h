@@ -5,6 +5,7 @@
 #include "GuitarPerformanceTypes.h"
 #include "GuitarAudioMetaSoundBridge.generated.h"
 
+struct FGuitarSettingsData;
 class UAudioComponent;
 class USoundBase;
 
@@ -36,4 +37,9 @@ protected:
 private:
     UFUNCTION()
     void HandleGuitarEvent(const FGuitarEvent& Event);
+
+    UFUNCTION()
+    void HandleSettingsChanged(const FGuitarSettingsData& NewSettings);
+
+    void ApplyAudioMixFromSettings();
 };

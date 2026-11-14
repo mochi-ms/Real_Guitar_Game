@@ -46,7 +46,7 @@ def bootstrap() -> None:
     content_dir = project_dir / "Content"
     asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
 
-    for sub in ("/Game/Input", "/Game/Models", "/Game/Audio/Samples", "/Game/Maps", "/Game/Blueprints"):
+    for sub in ("/Game/Input", "/Game/Models", "/Game/Audio/Samples", "/Game/UI/Textures", "/Game/Maps", "/Game/Blueprints"):
         ensure_dir(sub)
 
     # 1. Enhanced Input Actions + Mapping Context
@@ -56,6 +56,9 @@ def bootstrap() -> None:
     ia_play = create_input_action(asset_tools, "/Game/Input", "IA_TogglePlay", unreal.InputActionValueType.BOOLEAN)
     ia_cam = create_input_action(asset_tools, "/Game/Input", "IA_CycleCamera", unreal.InputActionValueType.BOOLEAN)
     ia_next = create_input_action(asset_tools, "/Game/Input", "IA_NextSong", unreal.InputActionValueType.BOOLEAN)
+    ia_pause = create_input_action(asset_tools, "/Game/Input", "IA_PauseMenu", unreal.InputActionValueType.BOOLEAN)
+    ia_hud = create_input_action(asset_tools, "/Game/Input", "IA_ToggleHud", unreal.InputActionValueType.BOOLEAN)
+    ia_mood = create_input_action(asset_tools, "/Game/Input", "IA_CycleMood", unreal.InputActionValueType.BOOLEAN)
 
     imc_path = "/Game/Input/IMC_AcousticChill"
     if not unreal.EditorAssetLibrary.does_asset_exist(imc_path):
@@ -64,20 +67,32 @@ def bootstrap() -> None:
         imc.map_key(ia_play, unreal.Key(key_name="SpaceBar"))
         imc.map_key(ia_cam, unreal.Key(key_name="C"))
         imc.map_key(ia_next, unreal.Key(key_name="N"))
+        imc.map_key(ia_pause, unreal.Key(key_name="Escape"))
+        imc.map_key(ia_hud, unreal.Key(key_name="H"))
+        imc.map_key(ia_mood, unreal.Key(key_name="T"))
         unreal.EditorAssetLibrary.save_asset(imc_path)
 
     # 2. Import Reference Acoustic Guitar GLB
     glb_file = content_dir / "Models" / "AcousticGuitar_Reference.glb"
     import_file(asset_tools, glb_file, "/Game/Models", "AcousticGuitar_Reference")
 
-    # 3. Import WAV multi-samples if generated
+    # 3. Import generated crisp UI icon & 9-slice panel textures
+    ui_tex_dir = content_dir / "UI" / "Textures"
+    if ui_tex_dir.exists():
+        for png in sorted(ui_tex_dir.glob("*.png")):
+            import_file(asset_tools, png, "/Game/UI/Textures")
+
+    # 4. Import WAV multi-samples if generated
     samples_dir = content_dir / "Audio" / "Samples"
     if samples_dir.exists():
         for wav in sorted(samples_dir.glob("*.wav")):
             import_file(asset_tools, wav, "/Game/Audio/Samples")
 
-    # 4. Spawn starter GuitarPerformerActor and InteractableSeatActor in current level
+    # 5. Spawn starter GuitarPerformerActor, InteractableSeatActor, and SanctuaryAtmosphereActor
     actor_sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    actor_sub.spawn_actor_from_class(
+        unreal.SanctuaryAtmosphereActor, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0)
+    )
     performer = actor_sub.spawn_actor_from_class(
         unreal.GuitarPerformerActor, unreal.Vector(220.0, 0.0, 92.0), unreal.Rotator(0.0, 0.0, 0.0)
     )

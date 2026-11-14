@@ -5,11 +5,13 @@
 #include "InputActionValue.h"
 #include "AcousticChillCharacter.generated.h"
 
+struct FGuitarSettingsData;
 class AInteractableSeatActor;
 class UCameraComponent;
 class UGuitarPerformanceHUDWidget;
 class UInputAction;
 class UInputMappingContext;
+class URealGuitarMenuWidget;
 
 /**
  * First-person exploration character capable of walking around the photorealistic scene
@@ -50,8 +52,23 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
     TObjectPtr<UInputAction> NextSongAction;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+    TObjectPtr<UInputAction> PauseMenuAction;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+    TObjectPtr<UInputAction> ToggleHudAction;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+    TObjectPtr<UInputAction> CycleMoodAction;
+
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
     TSubclassOf<UGuitarPerformanceHUDWidget> PerformanceHUDClass;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+    TSubclassOf<URealGuitarMenuWidget> MenuWidgetClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+    bool bShowTitleScreenOnBeginPlay = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
     float InteractTraceDistance = 260.0f;
@@ -64,6 +81,7 @@ public:
 
 protected:
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
     void HandleMove(const FInputActionValue& Value);
@@ -72,6 +90,20 @@ private:
     void HandleTogglePlay();
     void HandleCycleCamera();
     void HandleNextSong();
+    void HandlePauseMenu();
+    void HandleToggleHud();
+    void HandleCycleMood();
+
+    UFUNCTION()
+    void HandleOpenPauseFromHUD();
+
+    UFUNCTION()
+    void HandleMenuClosed();
+
+    UFUNCTION()
+    void HandleSettingsChanged(const FGuitarSettingsData& NewSettings);
+
+    void ApplyControlSettings(const FGuitarSettingsData& Settings);
 
     AInteractableSeatActor* FindLookedAtSeat() const;
 
@@ -80,4 +112,10 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<UGuitarPerformanceHUDWidget> HUDWidget;
+
+    UPROPERTY(Transient)
+    TObjectPtr<URealGuitarMenuWidget> MenuWidget;
+
+    float LookSensitivity = 1.0f;
+    bool bInvertLookY = false;
 };

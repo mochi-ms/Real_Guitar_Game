@@ -158,3 +158,12 @@ struct REALGUITARGAME_API FGuitarHandIKTargets
     UPROPERTY(BlueprintReadOnly, Category = "Guitar|IK")
     bool bIsStrumming = false;
 };
+
+UENUM(BlueprintType)
+enum class ESanctuaryMood : uint8
+{
+    GoldenSunset UMETA(DisplayName = "Golden Sunset"),
+    CozyNightLamp UMETA(DisplayName = "Cozy Night Lamp"),
+    MorningMist UMETA(DisplayName = "Morning Mist"),
+    RainyLoFi UMETA(DisplayName = "Rainy Lo-Fi")
+};

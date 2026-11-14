@@ -8,6 +8,7 @@ from engine.compiler import compile_score
 from engine.humanizer import humanize_performance
 from engine.soundbank import export_ue5_multisample_bank
 from tools.generate_guitar_glb import export_acoustic_guitar_glb
+from tools.generate_ui_textures import generate_ui_texture_pack
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 UE5_CONTENT = REPO_ROOT / "ue5" / "RealGuitarGame" / "Content"
@@ -30,6 +31,9 @@ def prepare_all(include_audio_samples: bool = True) -> None:
     glb_path = UE5_CONTENT / "Models" / "AcousticGuitar_Reference.glb"
     export_acoustic_guitar_glb(glb_path)
     print(f"[OK] Exported calibrated 3D guitar GLB -> {glb_path.relative_to(REPO_ROOT)}")
+
+    ui_paths = generate_ui_texture_pack(UE5_CONTENT / "UI" / "Textures")
+    print(f"[OK] Generated {len(ui_paths)} UI icon/panel PNG textures -> Content/UI/Textures/")
 
     if include_audio_samples:
         map_path = export_ue5_multisample_bank(UE5_CONTENT / "Audio")

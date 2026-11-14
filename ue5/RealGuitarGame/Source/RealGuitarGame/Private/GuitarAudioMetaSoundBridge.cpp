@@ -1,8 +1,10 @@
 #include "GuitarAudioMetaSoundBridge.h"
 
 #include "Components/AudioComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GuitarGameSettings.h"
 #include "GuitarScoreSubsystem.h"
 
 UGuitarAudioMetaSoundBridge::UGuitarAudioMetaSoundBridge()
@@ -33,7 +35,15 @@ void UGuitarAudioMetaSoundBridge::BeginPlay()
         {
             ScoreSub->OnGuitarEventTriggered.AddDynamic(this, &UGuitarAudioMetaSoundBridge::HandleGuitarEvent);
         }
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            if (UGuitarGameSettingsSubsystem* SettingsSub = GI->GetSubsystem<UGuitarGameSettingsSubsystem>())
+            {
+                SettingsSub->OnSettingsChanged.AddDynamic(this, &UGuitarAudioMetaSoundBridge::HandleSettingsChanged);
+            }
+        }
     }
+    ApplyAudioMixFromSettings();
 }
 
 void UGuitarAudioMetaSoundBridge::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -43,6 +53,13 @@ void UGuitarAudioMetaSoundBridge::EndPlay(const EEndPlayReason::Type EndPlayReas
         if (UGuitarScoreSubsystem* ScoreSub = World->GetSubsystem<UGuitarScoreSubsystem>())
         {
             ScoreSub->OnGuitarEventTriggered.RemoveDynamic(this, &UGuitarAudioMetaSoundBridge::HandleGuitarEvent);
+        }
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            if (UGuitarGameSettingsSubsystem* SettingsSub = GI->GetSubsystem<UGuitarGameSettingsSubsystem>())
+            {
+                SettingsSub->OnSettingsChanged.RemoveDynamic(this, &UGuitarAudioMetaSoundBridge::HandleSettingsChanged);
+            }
         }
     }
     Super::EndPlay(EndPlayReason);
@@ -62,6 +79,34 @@ void UGuitarAudioMetaSoundBridge::EnsureAudioStarted()
     {
         AudioComponent->Play();
     }
+    ApplyAudioMixFromSettings();
+}
+
+void UGuitarAudioMetaSoundBridge::HandleSettingsChanged(const FGuitarSettingsData& NewSettings)
+{
+    ApplyAudioMixFromSettings();
+}
+
+void UGuitarAudioMetaSoundBridge::ApplyAudioMixFromSettings()
+{
+    if (!AudioComponent)
+    {
+        return;
+    }
+    const UWorld* World = GetWorld();
+    const UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+    const UGuitarGameSettingsSubsystem* SettingsSub = GI ? GI->GetSubsystem<UGuitarGameSettingsSubsystem>() : nullptr;
+    if (!SettingsSub)
+    {
+        return;
+    }
+
+    const FGuitarSettingsData& S = SettingsSub->GetSettings();
+    const float CombinedVolume = FMath::Clamp(S.MasterVolume * S.GuitarVolume, 0.0f, 1.0f);
+    AudioComponent->SetVolumeMultiplier(CombinedVolume);
+    AudioComponent->SetFloatParameter(TEXT("MasterVolume"), S.MasterVolume);
+    AudioComponent->SetFloatParameter(TEXT("GuitarVolume"), S.GuitarVolume);
+    AudioComponent->SetFloatParameter(TEXT("ReverbMix"), S.ReverbMix);
 }
 
 void UGuitarAudioMetaSoundBridge::HandleGuitarEvent(const FGuitarEvent& Event)

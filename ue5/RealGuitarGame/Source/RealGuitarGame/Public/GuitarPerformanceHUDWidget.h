@@ -7,14 +7,19 @@
 
 class AGuitarPerformerActor;
 class UButton;
+class UProgressBar;
 class USlider;
 class UTextBlock;
+class UWidget;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnHUDRequestPauseMenu);
 
 /**
- * Minimalist chill HUD base widget supporting both exploration prompts and
+ * Minimalist dark-glass HUD widget supporting both exploration prompts and
  * seated guitar performance controls (chord display, song switching, camera angle, live pattern studio).
+ * Automatically builds a polished fallback UMG tree if no custom Designer WidgetBlueprint child overrides it.
  */
-UCLASS(Abstract)
+UCLASS()
 class REALGUITARGAME_API UGuitarPerformanceHUDWidget : public UUserWidget
 {
     GENERATED_BODY()
@@ -25,6 +30,15 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Guitar|HUD")
     void SetSeatedMode(bool bInSeated, AGuitarPerformerActor* LinkedPerformer = nullptr);
+
+    UFUNCTION(BlueprintCallable, Category = "Guitar|HUD")
+    void SetCinematicHudHidden(bool bInHidden);
+
+    UFUNCTION(BlueprintCallable, Category = "Guitar|HUD")
+    bool ToggleCinematicHud();
+
+    UFUNCTION(BlueprintPure, Category = "Guitar|HUD")
+    bool IsCinematicHudHidden() const { return bCinematicHudHidden; }
 
     UFUNCTION(BlueprintCallable, Category = "Guitar|HUD")
     void HandlePlayPauseClicked();
@@ -39,6 +53,12 @@ public:
     void HandleCycleCameraClicked();
 
     UFUNCTION(BlueprintCallable, Category = "Guitar|HUD")
+    void HandleCycleMoodClicked();
+
+    UFUNCTION(BlueprintCallable, Category = "Guitar|HUD")
+    void HandleOpenSettingsClicked();
+
+    UFUNCTION(BlueprintCallable, Category = "Guitar|HUD")
     void HandlePlaybackRateChanged(float NewRate);
 
     UFUNCTION(BlueprintCallable, Category = "Guitar|HUD")
@@ -49,7 +69,11 @@ public:
         const FString& PresetName
     );
 
+    UPROPERTY(BlueprintAssignable, Category = "Guitar|HUD")
+    FOnHUDRequestPauseMenu OnRequestPauseMenu;
+
 protected:
+    virtual TSharedRef<SWidget> RebuildWidget() override;
     virtual void NativeConstruct() override;
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
@@ -58,6 +82,18 @@ protected:
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Guitar|HUD")
     void BP_OnPromptUpdated(bool bVisible, const FText& PromptText);
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UWidget> TopHeaderBadgeRoot;
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UWidget> ChordCardRoot;
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UWidget> InteractionPromptPill;
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UWidget> SeatedControlBarRoot;
 
     UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
     TObjectPtr<UTextBlock> InteractionPromptText;
@@ -81,6 +117,18 @@ protected:
     TObjectPtr<UTextBlock> CameraModeText;
 
     UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UTextBlock> MoodBadgeText;
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UTextBlock> PlayPauseButtonLabel;
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UTextBlock> PlaybackRateValueText;
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UProgressBar> SongProgressBar;
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
     TObjectPtr<UButton> PlayPauseButton;
 
     UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
@@ -93,11 +141,22 @@ protected:
     TObjectPtr<UButton> CameraCycleButton;
 
     UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UButton> MoodCycleButton;
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
+    TObjectPtr<UButton> OpenSettingsButton;
+
+    UPROPERTY(meta = (BindWidgetOptional), BlueprintReadOnly, Category = "Guitar|HUD")
     TObjectPtr<USlider> PlaybackRateSlider;
 
 private:
+    void BuildDefaultHUDLayout();
+    void RefreshVisibilityState();
+
     UPROPERTY(Transient)
     TObjectPtr<AGuitarPerformerActor> ActivePerformer;
 
     bool bSeated = false;
+    bool bCinematicHudHidden = false;
+    bool bPromptCurrentlyVisible = false;
 };
