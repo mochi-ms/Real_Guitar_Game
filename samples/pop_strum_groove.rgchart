@@ -1,0 +1,21 @@
+{
+  "title": "Park Bench Groove (Pop Strum + Travis Pick)",
+  "artist": "RealGuitarGame Sample",
+  "bpm": 98,
+  "time_signature": { "numerator": 4, "denominator": 4 },
+  "capo": 0,
+  "sections": [
+    {
+      "name": "Intro Travis",
+      "style": "fingerstyle",
+      "pattern": "travis_pick",
+      "measures": ["C", "G", "Am", "F"]
+    },
+    {
+      "name": "Pop Rock Strum",
+      "style": "strum",
+      "pattern": "pop_rock",
+      "measures": ["C", "G", "Am", "F"]
+    }
+  ]
+}

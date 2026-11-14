@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RealGuitarGame — Score &amp; Fingering Simulator</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --panel: #171a23;
+      --border: #282d3d;
+      --text: #eceff4;
+      --muted: #98a2b3;
+      --accent: #f59e0b;
+      --accent-soft: rgba(245, 158, 11, 0.16);
+      --teal: #14b8a6;
+      --rose: #f43f5e;
+      --blue: #3b82f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(circle at top, #181c28 0%, #0d0f14 70%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+    header {
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+      padding: 16px 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    }
+    header h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.02em; }
+    header p { margin: 4px 0 0; color: var(--muted); font-size: 0.88rem; }
+    .badge {
+      padding: 6px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 600;
+      background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(245,158,11,0.35);
+    }
+    .grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+    @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .card h2 { margin: 0; font-size: 1rem; color: #f8fafc; }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+    select, input, button {
+      width: 100%; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--border);
+      background: #10131a; color: var(--text); font-size: 0.9rem;
+    }
+    button {
+      cursor: pointer; font-weight: 600; background: #222736; transition: 0.15s;
+    }
+    button:hover { background: #2d3448; }
+    button.primary { background: var(--accent); color: #111827; border-color: transparent; }
+    button.primary:hover { filter: brightness(1.08); }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+    .stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    .stat-box {
+      background: #10131a; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+    }
+    .stat-box .k { font-size: 0.75rem; color: var(--muted); }
+    .stat-box .v { font-size: 1.05rem; font-weight: 700; margin-top: 2px; }
+    canvas {
+      width: 100%; background: #0b0d12; border: 1px solid var(--border); border-radius: 12px; display: block;
+    }
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.82rem; color: var(--muted); align-items: center;
+    }
+    .dot {
+      display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px;
+    }
+    audio { width: 100%; margin-top: 4px; }
+    .status { font-size: 0.82rem; color: var(--teal); min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>RealGuitarGame — Core Guitar Performance Preview</h1>
+        <p>타브 악보(MusicXML / Guitar Pro) · 코드+스트로크/핑거스타일 · MIDI 통합 연주 엔진 미리보기</p>
+      </div>
+      <span class="badge" id="styleBadge">READY</span>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h2>1. 샘플 악보 불러오기</h2>
+        <div>
+          <label for="sampleSelect">샘플 선택</label>
+          <select id="sampleSelect"></select>
+        </div>
+        <div class="row">
+          <button class="primary" id="loadSampleBtn">불러오기 + 소리 생성</button>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:4px 0;" />
+
+        <h2>2. 코드 &amp; 주법 즉시 실험</h2>
+        <div>
+          <label for="chordsInput">코드 진행 (쉼표 구분)</label>
+          <input id="chordsInput" value="C, G/B, Am7, Fmaj7" />
+        </div>
+        <div class="row">
+          <div>
+            <label for="playStyleSelect">주법 스타일</label>
+            <select id="playStyleSelect">
+              <option value="strum">스트로크 (Strum)</option>
+              <option value="fingerstyle">핑거스타일 (Fingerstyle)</option>
+            </select>
+          </div>
+          <div>
+            <label for="bpmInput">BPM</label>
+            <input id="bpmInput" type="number" min="40" max="200" value="84" />
+          </div>
+        </div>
+        <div>
+          <label for="presetSelect">리듬 / 아르페지오 패턴</label>
+          <select id="presetSelect"></select>
+        </div>
+        <button class="primary" id="compileCustomBtn">코드로 생성 &amp; 연주하기</button>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:4px 0;" />
+
+        <div>
+          <label for="jsonUpload">컴파일된 .performance.json 열기</label>
+          <input id="jsonUpload" type="file" accept=".json" />
+        </div>
+
+        <div class="status" id="statusMsg">초기화 중...</div>
+      </div>
+
+      <div class="card">
+        <div class="stats">
+          <div class="stat-box"><div class="k">곡 제목</div><div class="v" id="statTitle">-</div></div>
+          <div class="stat-box"><div class="k">현재 코드</div><div class="v" id="statChord" style="color:var(--accent);">-</div></div>
+          <div class="stat-box"><div class="k">오른손 주법</div><div class="v" id="statRight">-</div></div>
+          <div class="stat-box"><div class="k">BPM / 시간</div><div class="v" id="statTime">0.00s</div></div>
+        </div>
+
+        <canvas id="fretCanvas" width="820" height="320"></canvas>
+        <canvas id="timelineCanvas" width="820" height="140"></canvas>
+
+        <div class="row" style="align-items:center;">
+          <button id="playPauseBtn" style="max-width:140px;">▶ 재생 / 일시정지</button>
+          <audio id="audioPlayer" controls></audio>
+        </div>
+
+        <div class="legend">
+          <span><span class="dot" style="background:#f59e0b;"></span>1 검지 / 활성 음</span>
+          <span><span class="dot" style="background:#3b82f6;"></span>2 중지</span>
+          <span><span class="dot" style="background:#14b8a6;"></span>3 약지</span>
+          <span><span class="dot" style="background:#f43f5e;"></span>4 소지</span>
+          <span>지판 위 굵은 흔들림 = 현재 울리는 줄 (6현 E2 ~ 1현 E4)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sampleSelect = document.getElementById("sampleSelect");
+    const playStyleSelect = document.getElementById("playStyleSelect");
+    const presetSelect = document.getElementById("presetSelect");
+    const statusMsg = document.getElementById("statusMsg");
+    const audioPlayer = document.getElementById("audioPlayer");
+    const fretCanvas = document.getElementById("fretCanvas");
+    const timelineCanvas = document.getElementById("timelineCanvas");
+    const fretCtx = fretCanvas.getContext("2d");
+    const timeCtx = timelineCanvas.getContext("2d");
+
+    let presets = { strum: [], fingerstyle: [] };
+    let currentPerf = null;
+    let currentAudioUrl = null;
+    const stringEnergy = [0, 0, 0, 0, 0, 0];
+    let lastCheckedTime = -1;
+
+    const FINGER_COLORS = {
+      0: "#e2e8f0",
+      1: "#f59e0b",
+      2: "#3b82f6",
+      3: "#14b8a6",
+      4: "#f43f5e",
+      5: "#a855f7",
+    };
+
+    const STRING_NAMES = ["1 E4", "2 B3", "3 G3", "4 D3", "5 A2", "6 E2"];
+
+    function updatePresetDropdown() {
+      const style = playStyleSelect.value;
+      const list = presets[style] || [];
+      presetSelect.innerHTML = "";
+      for (const name of list) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        presetSelect.appendChild(opt);
+      }
+    }
+
+    async function init() {
+      const [pRes, sRes] = await Promise.all([
+        fetch("/api/presets").then(r => r.json()),
+        fetch("/api/samples").then(r => r.json()),
+      ]);
+      presets = pRes;
+      updatePresetDropdown();
+      sampleSelect.innerHTML = "";
+      for (const name of sRes.samples || []) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        sampleSelect.appendChild(opt);
+      }
+      if (sampleSelect.options.length > 0) {
+        await loadSample(sampleSelect.value, false);
+      }
+    }
+
+    async function loadSample(filename, autoplay = true) {
+      statusMsg.textContent = `악보 컴파일 & 어쿠스틱 음원 합성 중 (${filename})...`;
+      const perf = await fetch(`/api/compile?file=${encodeURIComponent(filename)}`).then(r => r.json());
+      if (perf.error) {
+        statusMsg.textContent = "오류: " + perf.error;
+        return;
+      }
+      applyPerformance(perf);
+      const wavBlob = await fetch(`/api/wav?file=${encodeURIComponent(filename)}`).then(r => r.blob());
+      setAudioBlob(wavBlob, autoplay);
+      statusMsg.textContent = `준비 완료: ${perf.events.length}개 이벤트 (${perf.play_style})`;
+    }
+
+    async function compileCustom() {
+      const chords = document.getElementById("chordsInput").value
+        .split(",").map(s => s.trim()).filter(Boolean);
+      const bpm = Number(document.getElementById("bpmInput").value) || 84;
+      const style = playStyleSelect.value;
+      const pattern = presetSelect.value;
+
+      statusMsg.textContent = "코드 & 주법 컴파일 및 기타 소리 합성 중...";
+      const payload = {
+        title: `Custom (${style}: ${pattern})`,
+        bpm,
+        style,
+        pattern,
+        measures: chords.length ? chords : ["C", "G", "Am", "F"],
+      };
+      const perf = await fetch("/api/compile-custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).then(r => r.json());
+
+      if (perf.error) {
+        statusMsg.textContent = "오류: " + perf.error;
+        return;
+      }
+      applyPerformance(perf);
+      const wavBlob = await fetch("/api/render-wav", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(perf),
+      }).then(r => r.blob());
+      setAudioBlob(wavBlob, true);
+      statusMsg.textContent = `완료: ${perf.events.length}개 노트 생성 (${bpm} BPM)`;
+    }
+
+    function setAudioBlob(blob, autoplay) {
+      if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+      currentAudioUrl = URL.createObjectURL(blob);
+      audioPlayer.src = currentAudioUrl;
+      if (autoplay) audioPlayer.play().catch(() => {});
+    }
+
+    function applyPerformance(perf) {
+      currentPerf = perf;
+      lastCheckedTime = -1;
+      stringEnergy.fill(0);
+      document.getElementById("statTitle").textContent = perf.title;
+      document.getElementById("styleBadge").textContent = `${perf.source_format.toUpperCase()} · ${perf.play_style.toUpperCase()}`;
+    }
+
+    function fretX(fret, startX, neckWidth, maxFrets = 15) {
+      if (fret <= 0) return startX;
+      const norm = (1 - Math.pow(2, -fret / 12)) / (1 - Math.pow(2, -maxFrets / 12));
+      return startX + norm * neckWidth;
+    }
+
+    function drawFrame(nowMs) {
+      requestAnimationFrame(drawFrame);
+      const t = audioPlayer.currentTime || 0;
+      const w = fretCanvas.width;
+      const h = fretCanvas.height;
+
+      fretCtx.clearRect(0, 0, w, h);
+      fretCtx.fillStyle = "#0b0d12";
+      fretCtx.fillRect(0, 0, w, h);
+
+      const startX = 90;
+      const neckWidth = 540;
+      const topY = 48;
+      const strGap = 42;
+      const maxFrets = 15;
+
+      // Fretboard wood
+      fretCtx.fillStyle = "#2b1d14";
+      fretCtx.fillRect(startX, topY - 14, neckWidth, strGap * 5 + 28);
+
+      // Nut
+      fretCtx.fillStyle = "#f1f5f9";
+      fretCtx.fillRect(startX - 5, topY - 14, 6, strGap * 5 + 28);
+
+      // Fret wires & markers
+      const markers = new Set([3, 5, 7, 9, 12, 15]);
+      for (let f = 1; f <= maxFrets; f++) {
+        const x = fretX(f, startX, neckWidth, maxFrets);
+        const prevX = fretX(f - 1, startX, neckWidth, maxFrets);
+        fretCtx.strokeStyle = "#94a3b8";
+        fretCtx.lineWidth = 2;
+        fretCtx.beginPath();
+        fretCtx.moveTo(x, topY - 14);
+        fretCtx.lineTo(x, topY + strGap * 5 + 14);
+        fretCtx.stroke();
+
+        if (markers.has(f)) {
+          const midX = (prevX + x) * 0.5;
+          fretCtx.fillStyle = "rgba(255,255,255,0.22)";
+          if (f === 12) {
+            fretCtx.beginPath();
+            fretCtx.arc(midX, topY + strGap * 1.5, 5, 0, Math.PI * 2);
+            fretCtx.arc(midX, topY + strGap * 3.5, 5, 0, Math.PI * 2);
+            fretCtx.fill();
+          } else {
+            fretCtx.beginPath();
+            fretCtx.arc(midX, topY + strGap * 2.5, 5, 0, Math.PI * 2);
+            fretCtx.fill();
+          }
+          fretCtx.fillStyle = "#94a3b8";
+          fretCtx.font = "11px sans-serif";
+          fretCtx.textAlign = "center";
+          fretCtx.fillText(String(f), midX, topY + strGap * 5 + 32);
+        }
+      }
+
+      // Soundhole / Right-hand zone
+      const holeX = startX + neckWidth + 95;
+      const holeY = topY + strGap * 2.5;
+      fretCtx.fillStyle = "#140e0a";
+      fretCtx.strokeStyle = "#d97706";
+      fretCtx.lineWidth = 3;
+      fretCtx.beginPath();
+      fretCtx.arc(holeX, holeY, 72, 0, Math.PI * 2);
+      fretCtx.fill();
+      fretCtx.stroke();
+
+      // Update string energy from newly triggered notes
+      let activeNotes = [];
+      let activeChord = null;
+      let latestRightAction = "-";
+      let latestStrumDir = null;
+
+      if (currentPerf) {
+        if (t < lastCheckedTime) {
+          stringEnergy.fill(0);
+          lastCheckedTime = -1;
+        }
+        for (const ev of currentPerf.events) {
+          if (ev.time_sec > lastCheckedTime && ev.time_sec <= t && !audioPlayer.paused) {
+            stringEnergy[ev.string - 1] = Math.min(1.0, 0.5 + ev.velocity * 0.6);
+          }
+          if (ev.time_sec <= t && ev.time_sec + ev.duration_sec >= t) {
+            activeNotes.push(ev);
+          }
+          if (ev.time_sec <= t && t - ev.time_sec < 0.25) {
+            latestRightAction = ev.right_action;
+            if (ev.right_action === "strum_down" || ev.right_action === "strum_up") {
+              latestStrumDir = ev.right_action;
+            }
+          }
+        }
+        lastCheckedTime = t;
+
+        for (const ch of currentPerf.chords || []) {
+          if (ch.time_sec <= t && ch.time_sec + ch.duration_sec >= t) {
+            activeChord = ch;
+            break;
+          }
+        }
+
+        document.getElementById("statChord").textContent =
+          (activeChord && activeChord.symbol) || (activeNotes[0] && activeNotes[0].chord_symbol) || "-";
+        document.getElementById("statRight").textContent = latestRightAction;
+        document.getElementById("statTime").textContent = `${currentPerf.bpm} BPM · ${t.toFixed(2)}s`;
+      }
+
+      // Draw 6 strings with vibration
+      for (let s = 1; s <= 6; s++) {
+        const y = topY + (s - 1) * strGap;
+        stringEnergy[s - 1] *= 0.94;
+        const vib = stringEnergy[s - 1] * 4.5 * Math.sin(nowMs * 0.11 + s);
+
+        fretCtx.fillStyle = "#94a3b8";
+        fretCtx.font = "12px monospace";
+        fretCtx.textAlign = "right";
+        fretCtx.fillText(STRING_NAMES[s - 1], startX - 18, y + 4);
+
+        fretCtx.strokeStyle = stringEnergy[s - 1] > 0.15 ? "#fbbf24" : "#cbd5e1";
+        fretCtx.lineWidth = 1.1 + (s - 1) * 0.35;
+        fretCtx.beginPath();
+        fretCtx.moveTo(startX, y);
+        fretCtx.quadraticCurveTo(startX + neckWidth * 0.65, y + vib * 2.2, w - 20, y);
+        fretCtx.stroke();
+      }
+
+      // Draw chord silhouette frets lightly if available
+      if (activeChord) {
+        for (let s = 1; s <= 6; s++) {
+          const f = activeChord.frets[s - 1];
+          const fing = (activeChord.fingers && activeChord.fingers[s - 1]) || 0;
+          if (f > 0 && f <= maxFrets) {
+            const x1 = fretX(f - 1, startX, neckWidth, maxFrets);
+            const x2 = fretX(f, startX, neckWidth, maxFrets);
+            const cx = (x1 + x2) * 0.5;
+            const cy = topY + (s - 1) * strGap;
+            fretCtx.fillStyle = "rgba(255,255,255,0.16)";
+            fretCtx.beginPath();
+            fretCtx.arc(cx, cy, 10, 0, Math.PI * 2);
+            fretCtx.fill();
+            if (fing > 0) {
+              fretCtx.fillStyle = "rgba(255,255,255,0.45)";
+              fretCtx.font = "bold 10px sans-serif";
+              fretCtx.textAlign = "center";
+              fretCtx.fillText(String(fing), cx, cy + 3);
+            }
+          }
+        }
+      }
+
+      // Draw active sounding notes & fingers
+      for (const ev of activeNotes) {
+        const y = topY + (ev.string - 1) * strGap;
+        const x = ev.fret === 0
+          ? startX - 4
+          : (fretX(ev.fret - 1, startX, neckWidth, maxFrets) + fretX(ev.fret, startX, neckWidth, maxFrets)) * 0.5;
+        const col = FINGER_COLORS[ev.left_finger] || "#f59e0b";
+
+        fretCtx.fillStyle = col;
+        fretCtx.beginPath();
+        fretCtx.arc(x, y, 12, 0, Math.PI * 2);
+        fretCtx.fill();
+
+        fretCtx.fillStyle = "#0b0d12";
+        fretCtx.font = "bold 12px sans-serif";
+        fretCtx.textAlign = "center";
+        fretCtx.fillText(ev.fret === 0 ? "0" : String(ev.left_finger || ev.fret), x, y + 4);
+
+        // Right-hand pluck highlight over soundhole
+        if (t - ev.time_sec < 0.16) {
+          fretCtx.fillStyle = "rgba(245,158,11,0.9)";
+          fretCtx.beginPath();
+          fretCtx.arc(holeX, y, 7, 0, Math.PI * 2);
+          fretCtx.fill();
+        }
+      }
+
+      // Draw strum direction arrow in soundhole when strumming
+      if (latestStrumDir) {
+        const down = latestStrumDir === "strum_down";
+        fretCtx.strokeStyle = "#fbbf24";
+        fretCtx.lineWidth = 4;
+        fretCtx.beginPath();
+        fretCtx.moveTo(holeX + 46, down ? topY + 25 : topY + strGap * 5 - 25);
+        fretCtx.lineTo(holeX + 46, down ? topY + strGap * 5 - 25 : topY + 25);
+        fretCtx.stroke();
+        fretCtx.fillStyle = "#fbbf24";
+        fretCtx.font = "bold 14px sans-serif";
+        fretCtx.textAlign = "center";
+        fretCtx.fillText(down ? "▼" : "▲", holeX + 46, down ? topY + strGap * 5 - 12 : topY + 18);
+      }
+
+      drawTimeline(t);
+    }
+
+    function drawTimeline(t) {
+      const w = timelineCanvas.width;
+      const h = timelineCanvas.height;
+      timeCtx.clearRect(0, 0, w, h);
+      timeCtx.fillStyle = "#0b0d12";
+      timeCtx.fillRect(0, 0, w, h);
+
+      const playheadX = 120;
+      const pxPerSec = 130;
+
+      // String lanes
+      for (let s = 1; s <= 6; s++) {
+        const y = 18 + (s - 1) * 20;
+        timeCtx.strokeStyle = "#1e2433";
+        timeCtx.lineWidth = 1;
+        timeCtx.beginPath();
+        timeCtx.moveTo(0, y);
+        timeCtx.lineTo(w, y);
+        timeCtx.stroke();
+      }
+
+      if (currentPerf) {
+        for (const ev of currentPerf.events) {
+          const dx = (ev.time_sec - t) * pxPerSec;
+          const x = playheadX + dx;
+          if (x < -40 || x > w + 40) continue;
+          const y = 18 + (ev.string - 1) * 20;
+          const nw = Math.max(12, ev.duration_sec * pxPerSec);
+          const col = FINGER_COLORS[ev.left_finger] || "#f59e0b";
+
+          timeCtx.fillStyle = ev.time_sec <= t ? col : "rgba(148,163,184,0.35)";
+          timeCtx.fillRect(x, y - 7, nw, 14);
+          timeCtx.fillStyle = "#0b0d12";
+          timeCtx.font = "bold 10px monospace";
+          timeCtx.textAlign = "center";
+          timeCtx.fillText(String(ev.fret), x + 7, y + 3);
+        }
+      }
+
+      // Playhead line
+      timeCtx.strokeStyle = "#f59e0b";
+      timeCtx.lineWidth = 2;
+      timeCtx.beginPath();
+      timeCtx.moveTo(playheadX, 4);
+      timeCtx.lineTo(playheadX, h - 4);
+      timeCtx.stroke();
+    }
+
+    document.getElementById("loadSampleBtn").addEventListener("click", () => {
+      if (sampleSelect.value) loadSample(sampleSelect.value, true);
+    });
+    document.getElementById("compileCustomBtn").addEventListener("click", compileCustom);
+    playStyleSelect.addEventListener("change", updatePresetDropdown);
+    document.getElementById("playPauseBtn").addEventListener("click", () => {
+      if (audioPlayer.paused) audioPlayer.play().catch(() => {});
+      else audioPlayer.pause();
+    });
+    document.getElementById("jsonUpload").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const perf = JSON.parse(await file.text());
+      applyPerformance(perf);
+      const wavBlob = await fetch("/api/render-wav", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(perf),
+      }).then(r => r.blob());
+      setAudioBlob(wavBlob, true);
+      statusMsg.textContent = `JSON 로드 완료: ${perf.title}`;
+    });
+
+    init();
+    requestAnimationFrame(drawFrame);
+  </script>
+</body>
+</html>

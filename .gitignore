@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+output/
+*.wav
+
+# Unreal Engine 5
+ue5/*/Binaries/
+ue5/*/Build/
+ue5/*/DerivedDataCache/
+ue5/*/Intermediate/
+ue5/*/Saved/
+ue5/*/.vs/
+ue5/*/.vsconfig
+ue5/*/*.sln
+ue5/*/*.VC.db
+ue5/*/Content/Megascans/
+ue5/*/Content/MetaHumans/
+ue5/*/Content/ExternalAssets/
+
+# IDE & OS
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,21 @@
+{
+  "title": "Sunset Rooftop Ballad (Fingerstyle + 16-Beat Strum)",
+  "artist": "RealGuitarGame Sample",
+  "bpm": 82,
+  "time_signature": { "numerator": 4, "denominator": 4 },
+  "capo": 0,
+  "sections": [
+    {
+      "name": "Verse (Arpeggio)",
+      "style": "fingerstyle",
+      "pattern": "pima_ballad",
+      "measures": ["C", "G/B", "Am7", "Fmaj7"]
+    },
+    {
+      "name": "Chorus (16-Beat Strum)",
+      "style": "strum",
+      "pattern": "16beat_ballad",
+      "measures": ["C", "G", "Am", "Fmaj7"]
+    }
+  ]
+}

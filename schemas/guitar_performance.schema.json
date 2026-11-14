@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mochi-ms/Real_Guitar_Game/schemas/guitar_performance.schema.json",
+  "title": "GuitarPerformance",
+  "description": "Canonical guitar performance timeline shared between score parsers, preview tools, and Unreal Engine 5 runtime.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "title",
+    "source_format",
+    "bpm",
+    "time_signature",
+    "tuning_midi",
+    "duration_sec",
+    "events"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "title": { "type": "string" },
+    "artist": { "type": "string" },
+    "source_format": {
+      "type": "string",
+      "enum": ["musicxml", "guitar_pro", "midi", "rgchart"]
+    },
+    "play_style": {
+      "type": "string",
+      "enum": ["fingerstyle", "strum", "hybrid"]
+    },
+    "bpm": { "type": "number", "minimum": 20, "maximum": 320 },
+    "time_signature": {
+      "type": "object",
+      "required": ["numerator", "denominator"],
+      "properties": {
+        "numerator": { "type": "integer", "minimum": 1 },
+        "denominator": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "capo": { "type": "integer", "minimum": 0, "maximum": 12 },
+    "tuning_midi": {
+      "type": "array",
+      "description": "MIDI note numbers from string 1 (high E) to string 6 (low E).",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": { "type": "integer", "minimum": 20, "maximum": 100 }
+    },
+    "duration_sec": { "type": "number", "minimum": 0 },
+    "chords": {
+      "type": "array",
+      "description": "High-level chord labels and hand shape snapshots for UI and left-hand pre-shaping.",
+      "items": {
+        "type": "object",
+        "required": ["time_sec", "duration_sec", "symbol", "frets"],
+        "properties": {
+          "time_sec": { "type": "number", "minimum": 0 },
+          "duration_sec": { "type": "number", "minimum": 0 },
+          "symbol": { "type": "string" },
+          "frets": {
+            "type": "array",
+            "description": "Fret per string 1..6 (-1 = muted, 0 = open).",
+            "minItems": 6,
+            "maxItems": 6,
+            "items": { "type": "integer", "minimum": -1, "maximum": 24 }
+          },
+          "fingers": {
+            "type": "array",
+            "description": "Left-hand finger per string 1..6 (0 = none/open, 1..4 = index..pinky, 5 = thumb).",
+            "minItems": 6,
+            "maxItems": 6,
+            "items": { "type": "integer", "minimum": 0, "maximum": 5 }
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "time_sec",
+          "duration_sec",
+          "string",
+          "fret",
+          "midi_note",
+          "velocity",
+          "left_finger",
+          "right_action",
+          "articulation"
+        ],
+        "properties": {
+          "id": { "type": "integer", "minimum": 0 },
+          "time_sec": { "type": "number", "minimum": 0 },
+          "duration_sec": { "type": "number", "minimum": 0.01 },
+          "beat": { "type": "number", "minimum": 0 },
+          "string": { "type": "integer", "minimum": 1, "maximum": 6 },
+          "fret": { "type": "integer", "minimum": 0, "maximum": 24 },
+          "midi_note": { "type": "integer", "minimum": 20, "maximum": 127 },
+          "velocity": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "left_finger": {
+            "type": "integer",
+            "description": "0=open/none, 1=index, 2=middle, 3=ring, 4=pinky, 5=thumb",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "right_action": {
+            "type": "string",
+            "enum": [
+              "pluck_thumb",
+              "pluck_index",
+              "pluck_middle",
+              "pluck_ring",
+              "pick_down",
+              "pick_up",
+              "strum_down",
+              "strum_up",
+              "percussive_slap"
+            ]
+          },
+          "articulation": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "let_ring",
+              "palm_mute",
+              "dead_note",
+              "hammer_on",
+              "pull_off",
+              "slide",
+              "harmonic",
+              "vibrato"
+            ]
+          },
+          "strum_group_id": { "type": ["integer", "null"] },
+          "chord_symbol": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}
