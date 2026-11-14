@@ -27,10 +27,13 @@ ue5/*/*.VC.db
 ue5/*/Content/Megascans/
 ue5/*/Content/MetaHumans/
 ue5/*/Content/ExternalAssets/
+ue5/*/Content/Characters/
 ue5/*/Content/Audio/Samples/*.wav
 ue5/*/Content/Audio/Samples/*.uasset
 ue5/*/Content/Models/Props/
+ue5/*/Content/Models/Custom/
 ue5/*/Content/Models/AcousticGuitar_Reference/
+ue5/*/Content/Materials/Textures/
 
 # IDE & OS
 .vscode/

@@ -17,7 +17,8 @@ public class RealGuitarGame : ModuleRules
             "JsonUtilities",
             "UMG",
             "Slate",
-            "SlateCore"
+            "SlateCore",
+            "AnimationCore"
         });
     }
 }

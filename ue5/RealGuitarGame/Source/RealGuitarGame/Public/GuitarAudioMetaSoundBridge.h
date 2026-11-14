@@ -39,15 +39,7 @@ protected:
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-    struct FSampleZone
-    {
-        int32 RootMidi = 40;
-        int32 MinMidi = 40;
-        int32 MaxMidi = 40;
-        int32 MinVel = 1;
-        int32 MaxVel = 127;
-        TObjectPtr<USoundBase> SoundAsset = nullptr;
-    };
+    using FSampleZone = FGuitarSampleZone;
 
     UFUNCTION()
     void HandleGuitarEvent(const FGuitarEvent& Event);
@@ -62,9 +54,10 @@ private:
     const FSampleZone* FindBestZone(int32 MidiNote, float Velocity01) const;
     static USoundBase* LoadSampleAssetFromRelativeWavPath(const FString& RelWavPath);
 
-    static constexpr int32 NumPoolVoices = 12;
+    static constexpr int32 NumPoolVoices = 24;
 
-    TArray<FSampleZone> SampleZones;
+    UPROPERTY(Transient)
+    TArray<FGuitarSampleZone> SampleZones;
     UPROPERTY(Transient)
     TObjectPtr<USoundBase> PercussiveChuckSound;
 

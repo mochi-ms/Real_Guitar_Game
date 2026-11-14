@@ -5,26 +5,27 @@
 #include "GuitarGameSettings.h"
 #include "RealGuitarMenuWidget.generated.h"
 
+class UBorder;
 class UButton;
+class UCanvasPanelSlot;
 class UCheckBox;
+class UScrollBox;
 class USlider;
 class UTextBlock;
-class UWidget;
 class UWidgetSwitcher;
 
 UENUM(BlueprintType)
 enum class ERealGuitarMenuMode : uint8
 {
-    TitleScreen,
-    PauseMenu
+    TitleScreen UMETA(DisplayName = "Title Screen"),
+    PauseMenu UMETA(DisplayName = "Pause Menu")
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGuitarMenuClosed);
 
 /**
- * Full-featured dark-glass Title Screen, Pause Menu, Song & Live Jam Selector,
- * Graphics/Display Options, Audio/Mood Mixer, and Controls Settings menu.
- * Automatically constructs a complete UMG hierarchy when no Designer Blueprint override exists.
+ * Full procedural AAA dark-glass Title & Settings overlay menu.
+ * Title mode docks cleanly on the left so Quinn/Manny and the lakeside stage stay framed on the right.
  */
 UCLASS()
 class REALGUITARGAME_API URealGuitarMenuWidget : public UUserWidget
@@ -32,6 +33,8 @@ class REALGUITARGAME_API URealGuitarMenuWidget : public UUserWidget
     GENERATED_BODY()
 
 public:
+    virtual void NativeConstruct() override;
+
     UFUNCTION(BlueprintCallable, Category = "Guitar|Menu")
     void OpenMenu(ERealGuitarMenuMode InMode, int32 InitialTabIndex = 0);
 
@@ -50,23 +53,17 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Guitar|Menu")
     FOnGuitarMenuClosed OnMenuClosed;
 
-protected:
-    virtual TSharedRef<SWidget> RebuildWidget() override;
-    virtual void NativeConstruct() override;
-    virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
-
 private:
-    void BuildDefaultMenuLayout();
-    UWidget* BuildMainAndSongsTab();
-    UWidget* BuildGraphicsTab();
-    UWidget* BuildAudioAndMoodTab();
-    UWidget* BuildControlsTab();
-
+    void BuildMenuLayout();
+    UScrollBox* CreateTabScrollContainer();
+    void RefreshModeChrome();
     void SyncWidgetsFromSettings();
-    void RefreshSongDisplay();
-    void PushDraftSettings(bool bPersist = true);
+    void SyncSongAndPlayLabels();
+    void PushDraftSettings(bool bPersistToDisk);
+    UGuitarGameSettingsSubsystem* GetSettingsSubsystem() const;
+    int32 FindClosestResolutionIndex(const FIntPoint& Res) const;
 
-    // Navigation & main actions
+    // Chrome & Navigation Handlers
     UFUNCTION() void HandleResumeOrStartClicked();
     UFUNCTION() void HandleBackToTitleClicked();
     UFUNCTION() void HandleQuitClicked();
@@ -75,7 +72,12 @@ private:
     UFUNCTION() void HandleTabAudioClicked();
     UFUNCTION() void HandleTabControlsClicked();
 
-    // Song & Jam actions
+    // Tab 0: Main, Performer & Songs
+    UFUNCTION() void HandleTogglePlayModeClicked();
+    UFUNCTION() void HandleChordBankPrevClicked();
+    UFUNCTION() void HandleChordBankNextClicked();
+    UFUNCTION() void HandleCharacterPrevClicked();
+    UFUNCTION() void HandleCharacterNextClicked();
     UFUNCTION() void HandleSongPrevClicked();
     UFUNCTION() void HandleSongNextClicked();
     UFUNCTION() void HandlePlayPauseClicked();
@@ -84,7 +86,7 @@ private:
     UFUNCTION() void HandleJamFingerstyleClicked();
     UFUNCTION() void HandleJamPopGrooveClicked();
 
-    // Graphics steppers & toggles
+    // Tab 1: Graphics
     UFUNCTION() void HandleResPrevClicked();
     UFUNCTION() void HandleResNextClicked();
     UFUNCTION() void HandleWinModePrevClicked();
@@ -98,7 +100,7 @@ private:
     UFUNCTION() void HandleApplyGraphicsClicked();
     UFUNCTION() void HandleResetDefaultsClicked();
 
-    // Audio & Mood
+    // Tab 2: Audio & Mood
     UFUNCTION() void HandleMasterVolChanged(float Value);
     UFUNCTION() void HandleGuitarVolChanged(float Value);
     UFUNCTION() void HandleAmbientVolChanged(float Value);
@@ -110,53 +112,63 @@ private:
     UFUNCTION() void HandleShowChordsToggled(bool bChecked);
     UFUNCTION() void HandleAutoHideHudToggled(bool bChecked);
 
-    // Controls
+    // Tab 3: Camera & Controls
+    UFUNCTION() void HandleCamDistChanged(float Value);
     UFUNCTION() void HandleMouseSensChanged(float Value);
     UFUNCTION() void HandleFovChanged(float Value);
     UFUNCTION() void HandleInvertYToggled(bool bChecked);
 
-    UPROPERTY(Transient) TObjectPtr<UWidgetSwitcher> ContentSwitcher;
+    UPROPERTY(Transient) TObjectPtr<UBorder> RootBackdrop;
+    UPROPERTY(Transient) TObjectPtr<UBorder> MainPanelBorder;
+    UPROPERTY(Transient) TObjectPtr<UCanvasPanelSlot> MainPanelSlot;
     UPROPERTY(Transient) TObjectPtr<UTextBlock> HeroTitleText;
     UPROPERTY(Transient) TObjectPtr<UTextBlock> HeroSubtitleText;
-    UPROPERTY(Transient) TObjectPtr<UTextBlock> PrimaryActionLabel;
     UPROPERTY(Transient) TObjectPtr<UButton> PrimaryActionButton;
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> PrimaryActionLabel;
     UPROPERTY(Transient) TObjectPtr<UButton> BackToTitleButton;
     UPROPERTY(Transient) TObjectPtr<UButton> QuitButton;
-    UPROPERTY(Transient) TObjectPtr<UButton> TabMainButton;
-    UPROPERTY(Transient) TObjectPtr<UButton> TabGraphicsButton;
-    UPROPERTY(Transient) TObjectPtr<UButton> TabAudioButton;
-    UPROPERTY(Transient) TObjectPtr<UButton> TabControlsButton;
+    UPROPERTY(Transient) TArray<TObjectPtr<UButton>> TabButtons;
+    UPROPERTY(Transient) TObjectPtr<UWidgetSwitcher> ContentSwitcher;
 
-    // Songs Tab
+    // Tab 0 widgets
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> PlayModeValueText;
+    UPROPERTY(Transient) TObjectPtr<UButton> TogglePlayModeButton;
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> ChordBankValueText;
+    UPROPERTY(Transient) TObjectPtr<UButton> ChordBankPrevButton;
+    UPROPERTY(Transient) TObjectPtr<UButton> ChordBankNextButton;
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> CharacterValueText;
+    UPROPERTY(Transient) TObjectPtr<UButton> CharacterPrevButton;
+    UPROPERTY(Transient) TObjectPtr<UButton> CharacterNextButton;
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> SelectedSongText;
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> PlayPauseLabelText;
     UPROPERTY(Transient) TObjectPtr<UButton> SongPrevButton;
     UPROPERTY(Transient) TObjectPtr<UButton> SongNextButton;
-    UPROPERTY(Transient) TObjectPtr<UButton> SongPlayPauseButton;
-    UPROPERTY(Transient) TObjectPtr<UTextBlock> SongNameValueText;
-    UPROPERTY(Transient) TObjectPtr<UCheckBox> LoopSongCheckBox;
+    UPROPERTY(Transient) TObjectPtr<UButton> PlayPauseButton;
+    UPROPERTY(Transient) TObjectPtr<UCheckBox> LoopCheckBox;
     UPROPERTY(Transient) TObjectPtr<UButton> JamBalladButton;
-    UPROPERTY(Transient) TObjectPtr<UButton> JamFingerButton;
+    UPROPERTY(Transient) TObjectPtr<UButton> JamFingerstyleButton;
     UPROPERTY(Transient) TObjectPtr<UButton> JamPopButton;
 
-    // Graphics Tab
+    // Tab 1 widgets
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> ResValueText;
     UPROPERTY(Transient) TObjectPtr<UButton> ResPrevButton;
     UPROPERTY(Transient) TObjectPtr<UButton> ResNextButton;
-    UPROPERTY(Transient) TObjectPtr<UTextBlock> ResValueText;
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> WinModeValueText;
     UPROPERTY(Transient) TObjectPtr<UButton> WinModePrevButton;
     UPROPERTY(Transient) TObjectPtr<UButton> WinModeNextButton;
-    UPROPERTY(Transient) TObjectPtr<UTextBlock> WinModeValueText;
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> FpsValueText;
     UPROPERTY(Transient) TObjectPtr<UButton> FpsPrevButton;
     UPROPERTY(Transient) TObjectPtr<UButton> FpsNextButton;
-    UPROPERTY(Transient) TObjectPtr<UTextBlock> FpsValueText;
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> QualityValueText;
     UPROPERTY(Transient) TObjectPtr<UButton> QualityPrevButton;
     UPROPERTY(Transient) TObjectPtr<UButton> QualityNextButton;
-    UPROPERTY(Transient) TObjectPtr<UTextBlock> QualityValueText;
     UPROPERTY(Transient) TObjectPtr<UCheckBox> VSyncCheckBox;
     UPROPERTY(Transient) TObjectPtr<UCheckBox> LumenCheckBox;
     UPROPERTY(Transient) TObjectPtr<UButton> ApplyGraphicsButton;
     UPROPERTY(Transient) TObjectPtr<UButton> ResetDefaultsButton;
     UPROPERTY(Transient) TObjectPtr<UTextBlock> GraphicsStatusText;
 
-    // Audio & Mood Tab
+    // Tab 2 widgets
     UPROPERTY(Transient) TObjectPtr<USlider> MasterVolSlider;
     UPROPERTY(Transient) TObjectPtr<UTextBlock> MasterVolValueText;
     UPROPERTY(Transient) TObjectPtr<USlider> GuitarVolSlider;
@@ -173,7 +185,9 @@ private:
     UPROPERTY(Transient) TObjectPtr<UCheckBox> ShowChordsCheckBox;
     UPROPERTY(Transient) TObjectPtr<UCheckBox> AutoHideHudCheckBox;
 
-    // Controls Tab
+    // Tab 3 widgets
+    UPROPERTY(Transient) TObjectPtr<USlider> CamDistSlider;
+    UPROPERTY(Transient) TObjectPtr<UTextBlock> CamDistValueText;
     UPROPERTY(Transient) TObjectPtr<USlider> MouseSensSlider;
     UPROPERTY(Transient) TObjectPtr<UTextBlock> MouseSensValueText;
     UPROPERTY(Transient) TObjectPtr<USlider> FovSlider;

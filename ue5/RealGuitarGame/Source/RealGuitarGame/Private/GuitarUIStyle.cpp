@@ -6,231 +6,322 @@
 #include "Components/CheckBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
-#include "Components/PanelWidget.h"
+#include "Components/Image.h"
+#include "Components/ProgressBar.h"
+#include "Components/SizeBox.h"
 #include "Components/Slider.h"
 #include "Components/Spacer.h"
 #include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
+#include "Engine/Texture2D.h"
+#include "Styling/SlateTypes.h"
 
-UTextBlock* GuitarUIStyle::MakeText(
-    UWidgetTree* Tree,
-    const FText& Text,
-    int32 FontSize,
-    FLinearColor Color,
-    bool bBold
-)
+namespace GuitarUIStyle
 {
-    UTextBlock* TB = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-    TB->SetText(Text);
-    TB->SetColorAndOpacity(FSlateColor(Color));
-
-    FSlateFontInfo FontInfo = TB->GetFont();
-    FontInfo.Size = FontSize;
-    if (bBold)
+    UTexture2D* LoadUITexture(const TCHAR* AssetPath)
     {
-        FontInfo.TypefaceFontName = FName(TEXT("Bold"));
+        if (!AssetPath)
+        {
+            return nullptr;
+        }
+        return LoadObject<UTexture2D>(nullptr, AssetPath);
     }
-    TB->SetFont(FontInfo);
-    return TB;
-}
 
-UBorder* GuitarUIStyle::MakeGlassCard(
-    UWidgetTree* Tree,
-    UWidget* Content,
-    FMargin Padding,
-    FLinearColor Color
-)
-{
-    UBorder* Border = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
-    Border->SetBrushColor(Color);
-    Border->SetPadding(Padding);
-    if (Content)
+    FSlateBrush MakeGlassBoxBrush(const FLinearColor& Tint)
     {
-        Border->SetContent(Content);
+        FSlateBrush Brush;
+        if (UTexture2D* GlassTex = LoadUITexture(TEXT("/Game/UI/Textures/T_UI_GlassPanel_9Slice.T_UI_GlassPanel_9Slice")))
+        {
+            Brush.SetResourceObject(GlassTex);
+            Brush.DrawAs = ESlateBrushDrawType::Box;
+            Brush.Margin = FMargin(0.32f);
+            Brush.ImageSize = FVector2D(64.0f, 64.0f);
+            Brush.TintColor = FSlateColor(Tint);
+        }
+        else
+        {
+            Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
+            Brush.TintColor = FSlateColor(Tint);
+            Brush.OutlineSettings = FSlateBrushOutlineSettings(FVector4(10.0f, 10.0f, 10.0f, 10.0f));
+        }
+        return Brush;
     }
-    return Border;
-}
 
-UButton* GuitarUIStyle::MakeButton(
-    UWidgetTree* Tree,
-    const FText& Label,
-    TObjectPtr<UTextBlock>& OutLabelText,
-    bool bPrimaryAccent,
-    int32 FontSize,
-    FMargin ContentPadding
-)
-{
-    UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass());
-    Button->SetBackgroundColor(bPrimaryAccent ? AccentGoldDim : ButtonSecondary);
-
-    UBorder* InnerPad = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
-    InnerPad->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.0f));
-    InnerPad->SetPadding(ContentPadding);
-    InnerPad->SetHorizontalAlignment(HAlign_Center);
-    InnerPad->SetVerticalAlignment(VAlign_Center);
-
-    UTextBlock* LabelTB = MakeText(Tree, Label, FontSize, TextPrimary, bPrimaryAccent);
-    LabelTB->SetJustification(ETextJustify::Center);
-    OutLabelText = LabelTB;
-    InnerPad->SetContent(LabelTB);
-
-    Button->SetContent(InnerPad);
-    return Button;
-}
-
-UButton* GuitarUIStyle::MakeSimpleButton(
-    UWidgetTree* Tree,
-    const FText& Label,
-    bool bPrimaryAccent,
-    int32 FontSize,
-    FMargin ContentPadding
-)
-{
-    TObjectPtr<UTextBlock> UnusedLabel;
-    return MakeButton(Tree, Label, UnusedLabel, bPrimaryAccent, FontSize, ContentPadding);
-}
-
-USlider* GuitarUIStyle::MakeStyledSlider(
-    UWidgetTree* Tree,
-    float MinVal,
-    float MaxVal,
-    float StepSize
-)
-{
-    USlider* Slider = Tree->ConstructWidget<USlider>(USlider::StaticClass());
-    Slider->SetMinValue(MinVal);
-    Slider->SetMaxValue(MaxVal);
-    Slider->SetStepSize(StepSize);
-    Slider->SetSliderBarColor(FLinearColor(0.28f, 0.28f, 0.34f, 1.0f));
-    Slider->SetSliderHandleColor(AccentGold);
-    return Slider;
-}
-
-UHorizontalBox* GuitarUIStyle::AddSettingSliderRow(
-    UWidgetTree* Tree,
-    UVerticalBox* ParentBox,
-    const FText& Label,
-    float MinVal,
-    float MaxVal,
-    float StepSize,
-    TObjectPtr<USlider>& OutSlider,
-    TObjectPtr<UTextBlock>& OutValueText
-)
-{
-    UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-
-    UTextBlock* LabelTB = MakeText(Tree, Label, 14, TextPrimary);
-    if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(LabelTB))
+    static void ApplyGlassButtonStyle(UButton* Button, bool bPrimaryAccent)
     {
-        LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+        if (!Button)
+        {
+            return;
+        }
+        const FLinearColor NormalTint = bPrimaryAccent ? AccentGoldDim : ButtonSecondary;
+        const FLinearColor HoverTint = bPrimaryAccent
+            ? FLinearColor(0.88f, 0.64f, 0.36f, 0.98f)
+            : ButtonHover;
+        const FLinearColor PressTint = bPrimaryAccent
+            ? FLinearColor(0.50f, 0.34f, 0.18f, 1.0f)
+            : FLinearColor(0.08f, 0.09f, 0.12f, 1.0f);
+
+        FButtonStyle Style = Button->GetStyle();
+        Style.SetNormal(MakeGlassBoxBrush(NormalTint));
+        Style.SetHovered(MakeGlassBoxBrush(HoverTint));
+        Style.SetPressed(MakeGlassBoxBrush(PressTint));
+        Style.SetNormalPadding(FMargin(0.0f));
+        Style.SetPressedPadding(FMargin(0.0f, 1.0f, 0.0f, -1.0f));
+        Button->SetStyle(Style);
+        Button->SetBackgroundColor(FLinearColor::White);
+    }
+
+    UTextBlock* MakeText(
+        UWidgetTree* Tree,
+        const FText& Text,
+        int32 FontSize,
+        FLinearColor Color,
+        bool bBold)
+    {
+        UTextBlock* TB = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+        TB->SetText(Text);
+        TB->SetColorAndOpacity(FSlateColor(Color));
+        FSlateFontInfo FontInfo = TB->GetFont();
+        FontInfo.Size = FontSize;
+        FontInfo.TypefaceFontName = bBold ? FName(TEXT("Bold")) : FName(TEXT("Regular"));
+        TB->SetFont(FontInfo);
+        TB->SetShadowOffset(FVector2D(1.0f, 1.0f));
+        TB->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.45f));
+        return TB;
+    }
+
+    UImage* MakeIconImage(
+        UWidgetTree* Tree,
+        const TCHAR* TexturePath,
+        float SizePx,
+        FLinearColor Tint)
+    {
+        UImage* Img = Tree->ConstructWidget<UImage>(UImage::StaticClass());
+        if (UTexture2D* Tex = LoadUITexture(TexturePath))
+        {
+            Img->SetBrushFromTexture(Tex, false);
+        }
+        Img->SetDesiredSizeOverride(FVector2D(SizePx, SizePx));
+        Img->SetColorAndOpacity(Tint);
+        return Img;
+    }
+
+    UBorder* MakeGlassCard(
+        UWidgetTree* Tree,
+        UWidget* ChildContent,
+        FMargin Padding,
+        FLinearColor Color)
+    {
+        UBorder* Border = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
+        Border->SetPadding(Padding);
+        Border->SetBrush(MakeGlassBoxBrush(Color));
+        Border->SetBrushColor(FLinearColor::White);
+        if (ChildContent)
+        {
+            Border->SetContent(ChildContent);
+        }
+        return Border;
+    }
+
+    UButton* MakeSimpleButton(
+        UWidgetTree* Tree,
+        const FText& LabelText,
+        bool bPrimaryAccent,
+        int32 FontSize,
+        FMargin ContentPadding)
+    {
+        UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass());
+        ApplyGlassButtonStyle(Button, bPrimaryAccent);
+
+        UBorder* InnerPad = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
+        InnerPad->SetPadding(ContentPadding);
+        InnerPad->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.0f));
+
+        UTextBlock* Label = MakeText(Tree, LabelText, FontSize, TextPrimary, true);
+        Label->SetJustification(ETextJustify::Center);
+        InnerPad->SetContent(Label);
+        Button->AddChild(InnerPad);
+        return Button;
+    }
+
+    UButton* MakeButton(
+        UWidgetTree* Tree,
+        UPanelWidget* ParentBox,
+        const FText& LabelText,
+        bool bPrimaryAccent,
+        int32 FontSize,
+        FMargin ContentPadding)
+    {
+        UButton* Button = MakeSimpleButton(Tree, LabelText, bPrimaryAccent, FontSize, ContentPadding);
+        if (ParentBox)
+        {
+            ParentBox->AddChild(Button);
+        }
+        return Button;
+    }
+
+    UButton* MakeIconButton(
+        UWidgetTree* Tree,
+        UPanelWidget* ParentBox,
+        const TCHAR* IconTexturePath,
+        const FText& OptionalLabel,
+        bool bPrimaryAccent,
+        float IconSizePx,
+        int32 FontSize,
+        FMargin ContentPadding)
+    {
+        UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass());
+        ApplyGlassButtonStyle(Button, bPrimaryAccent);
+
+        UBorder* InnerPad = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
+        InnerPad->SetPadding(ContentPadding);
+        InnerPad->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.0f));
+
+        UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+        UImage* Icon = MakeIconImage(Tree, IconTexturePath, IconSizePx, TextPrimary);
+        UHorizontalBoxSlot* IconSlot = Row->AddChildToHorizontalBox(Icon);
+        IconSlot->SetVerticalAlignment(VAlign_Center);
+
+        if (!OptionalLabel.IsEmpty())
+        {
+            AddSpacer(Tree, Row, 6.0f, 1.0f);
+            UTextBlock* Label = MakeText(Tree, OptionalLabel, FontSize, TextPrimary, true);
+            UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(Label);
+            LabelSlot->SetVerticalAlignment(VAlign_Center);
+        }
+
+        InnerPad->SetContent(Row);
+        Button->AddChild(InnerPad);
+        if (ParentBox)
+        {
+            ParentBox->AddChild(Button);
+        }
+        return Button;
+    }
+
+    UProgressBar* MakeProgressPill(UWidgetTree* Tree, FLinearColor FillColor)
+    {
+        UProgressBar* Bar = Tree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass());
+        Bar->SetFillColorAndOpacity(FillColor);
+        Bar->SetPercent(0.0f);
+        return Bar;
+    }
+
+    USlider* MakeStyledSlider(UWidgetTree* Tree, float MinVal, float MaxVal, float StepSize)
+    {
+        USlider* Slider = Tree->ConstructWidget<USlider>(USlider::StaticClass());
+        Slider->SetMinValue(MinVal);
+        Slider->SetMaxValue(MaxVal);
+        Slider->SetStepSize(StepSize);
+        Slider->SetSliderHandleColor(AccentGold);
+        Slider->SetSliderBarColor(FLinearColor(0.24f, 0.25f, 0.30f, 0.95f));
+        return Slider;
+    }
+
+    UHorizontalBox* AddSettingSliderRow(
+        UWidgetTree* Tree,
+        UPanelWidget* ParentBox,
+        const FText& TitleText,
+        USlider*& OutSlider,
+        UTextBlock*& OutValueText,
+        float MinVal,
+        float MaxVal,
+        float StepSize)
+    {
+        UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+
+        UTextBlock* Title = MakeText(Tree, TitleText, 13, TextPrimary, false);
+        USizeBox* LabelBox = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+        LabelBox->SetWidthOverride(200.0f);
+        LabelBox->AddChild(Title);
+        UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(LabelBox);
         LabelSlot->SetVerticalAlignment(VAlign_Center);
-    }
 
-    USlider* Slider = MakeStyledSlider(Tree, MinVal, MaxVal, StepSize);
-    OutSlider = Slider;
-    if (UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(Slider))
-    {
-        FSlateChildSize Fill(ESlateSizeRule::Fill);
-        Fill.Value = 1.25f;
-        SliderSlot->SetSize(Fill);
+        OutSlider = MakeStyledSlider(Tree, MinVal, MaxVal, StepSize);
+        UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(OutSlider);
+        SliderSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
         SliderSlot->SetVerticalAlignment(VAlign_Center);
-        SliderSlot->SetPadding(FMargin(12.0f, 0.0f));
-    }
+        SliderSlot->SetPadding(FMargin(10.0f, 0.0f));
 
-    UTextBlock* ValueTB = MakeText(Tree, FText::FromString(TEXT("0%")), 13, AccentGold, true);
-    ValueTB->SetMinDesiredWidth(64.0f);
-    ValueTB->SetJustification(ETextJustify::Right);
-    OutValueText = ValueTB;
-    if (UHorizontalBoxSlot* ValSlot = Row->AddChildToHorizontalBox(ValueTB))
-    {
+        OutValueText = MakeText(Tree, FText::FromString(TEXT("0%")), 13, AccentGold, true);
+        USizeBox* ValBox = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+        ValBox->SetWidthOverride(72.0f);
+        OutValueText->SetJustification(ETextJustify::Right);
+        ValBox->AddChild(OutValueText);
+        UHorizontalBoxSlot* ValSlot = Row->AddChildToHorizontalBox(ValBox);
         ValSlot->SetVerticalAlignment(VAlign_Center);
+
+        if (ParentBox)
+        {
+            ParentBox->AddChild(Row);
+        }
+        return Row;
     }
 
-    if (UVerticalBoxSlot* VSlot = ParentBox->AddChildToVerticalBox(Row))
+    UHorizontalBox* AddStepperRow(
+        UWidgetTree* Tree,
+        UPanelWidget* ParentBox,
+        const FText& TitleText,
+        UButton*& OutPrevBtn,
+        UTextBlock*& OutValueText,
+        UButton*& OutNextBtn)
     {
-        VSlot->SetPadding(FMargin(0.0f, 5.0f));
-    }
-    return Row;
-}
+        UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 
-UHorizontalBox* GuitarUIStyle::AddStepperRow(
-    UWidgetTree* Tree,
-    UVerticalBox* ParentBox,
-    const FText& Label,
-    TObjectPtr<UButton>& OutPrevButton,
-    TObjectPtr<UTextBlock>& OutValueText,
-    TObjectPtr<UButton>& OutNextButton
-)
-{
-    UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-
-    UTextBlock* LabelTB = MakeText(Tree, Label, 14, TextPrimary);
-    if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(LabelTB))
-    {
-        LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+        UTextBlock* Title = MakeText(Tree, TitleText, 13, TextPrimary, false);
+        USizeBox* LabelBox = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+        LabelBox->SetWidthOverride(200.0f);
+        LabelBox->AddChild(Title);
+        UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(LabelBox);
         LabelSlot->SetVerticalAlignment(VAlign_Center);
+
+        OutPrevBtn = MakeButton(Tree, Row, FText::FromString(TEXT("<")), false, 13, FMargin(11.0f, 4.0f));
+        OutValueText = MakeText(Tree, FText::FromString(TEXT("-")), 13, AccentGold, true);
+        OutValueText->SetJustification(ETextJustify::Center);
+        UHorizontalBoxSlot* ValueSlot = Row->AddChildToHorizontalBox(OutValueText);
+        ValueSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+        ValueSlot->SetVerticalAlignment(VAlign_Center);
+        ValueSlot->SetPadding(FMargin(8.0f, 0.0f));
+
+        OutNextBtn = MakeButton(Tree, Row, FText::FromString(TEXT(">")), false, 13, FMargin(11.0f, 4.0f));
+
+        if (ParentBox)
+        {
+            ParentBox->AddChild(Row);
+        }
+        return Row;
     }
 
-    UButton* PrevBtn = MakeSimpleButton(Tree, FText::FromString(TEXT("<")), false, 13, FMargin(10.0f, 4.0f));
-    OutPrevButton = PrevBtn;
-    Row->AddChildToHorizontalBox(PrevBtn);
-
-    UTextBlock* ValueTB = MakeText(Tree, FText::FromString(TEXT("-")), 14, AccentGold, true);
-    ValueTB->SetMinDesiredWidth(210.0f);
-    ValueTB->SetJustification(ETextJustify::Center);
-    OutValueText = ValueTB;
-    if (UHorizontalBoxSlot* ValSlot = Row->AddChildToHorizontalBox(ValueTB))
+    UHorizontalBox* AddCheckBoxRow(
+        UWidgetTree* Tree,
+        UPanelWidget* ParentBox,
+        const FText& TitleText,
+        UCheckBox*& OutCheckBox)
     {
-        ValSlot->SetVerticalAlignment(VAlign_Center);
-        ValSlot->SetPadding(FMargin(8.0f, 0.0f));
-    }
+        UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 
-    UButton* NextBtn = MakeSimpleButton(Tree, FText::FromString(TEXT(">")), false, 13, FMargin(10.0f, 4.0f));
-    OutNextButton = NextBtn;
-    Row->AddChildToHorizontalBox(NextBtn);
+        UTextBlock* Title = MakeText(Tree, TitleText, 13, TextPrimary, false);
+        UHorizontalBoxSlot* TitleSlot = Row->AddChildToHorizontalBox(Title);
+        TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+        TitleSlot->SetVerticalAlignment(VAlign_Center);
 
-    if (UVerticalBoxSlot* VSlot = ParentBox->AddChildToVerticalBox(Row))
-    {
-        VSlot->SetPadding(FMargin(0.0f, 5.0f));
-    }
-    return Row;
-}
-
-UHorizontalBox* GuitarUIStyle::AddCheckBoxRow(
-    UWidgetTree* Tree,
-    UVerticalBox* ParentBox,
-    const FText& Label,
-    TObjectPtr<UCheckBox>& OutCheckBox
-)
-{
-    UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-
-    UTextBlock* LabelTB = MakeText(Tree, Label, 14, TextPrimary);
-    if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(LabelTB))
-    {
-        LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-        LabelSlot->SetVerticalAlignment(VAlign_Center);
-    }
-
-    UCheckBox* Check = Tree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass());
-    OutCheckBox = Check;
-    if (UHorizontalBoxSlot* CheckSlot = Row->AddChildToHorizontalBox(Check))
-    {
+        OutCheckBox = Tree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass());
+        UHorizontalBoxSlot* CheckSlot = Row->AddChildToHorizontalBox(OutCheckBox);
         CheckSlot->SetVerticalAlignment(VAlign_Center);
-        CheckSlot->SetPadding(FMargin(10.0f, 0.0f, 4.0f, 0.0f));
+
+        if (ParentBox)
+        {
+            ParentBox->AddChild(Row);
+        }
+        return Row;
     }
 
-    if (UVerticalBoxSlot* VSlot = ParentBox->AddChildToVerticalBox(Row))
+    void AddSpacer(UWidgetTree* Tree, UPanelWidget* ParentBox, float Width, float Height)
     {
-        VSlot->SetPadding(FMargin(0.0f, 5.0f));
+        USpacer* Spacer = Tree->ConstructWidget<USpacer>(USpacer::StaticClass());
+        Spacer->SetSize(FVector2D(Width, Height));
+        if (ParentBox)
+        {
+            ParentBox->AddChild(Spacer);
+        }
     }
-    return Row;
-}
-
-void GuitarUIStyle::AddSpacer(UWidgetTree* Tree, UPanelWidget* ParentBox, float Width, float Height)
-{
-    USpacer* Spacer = Tree->ConstructWidget<USpacer>(USpacer::StaticClass());
-    Spacer->SetSize(FVector2D(Width, Height));
-    ParentBox->AddChild(Spacer);
 }

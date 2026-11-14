@@ -3,6 +3,39 @@
 #include "CoreMinimal.h"
 #include "GuitarPerformanceTypes.generated.h"
 
+class USoundBase;
+
+UENUM(BlueprintType)
+enum class EPlayControlMode : uint8
+{
+    FreePlay UMETA(DisplayName = "Free Play"),
+    AutoSong UMETA(DisplayName = "Auto Song")
+};
+
+USTRUCT()
+struct REALGUITARGAME_API FGuitarSampleZone
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    int32 RootMidi = 40;
+
+    UPROPERTY()
+    int32 MinMidi = 40;
+
+    UPROPERTY()
+    int32 MaxMidi = 40;
+
+    UPROPERTY()
+    int32 MinVel = 1;
+
+    UPROPERTY()
+    int32 MaxVel = 127;
+
+    UPROPERTY()
+    TObjectPtr<USoundBase> SoundAsset = nullptr;
+};
+
 UENUM(BlueprintType)
 enum class EGuitarRightAction : uint8
 {

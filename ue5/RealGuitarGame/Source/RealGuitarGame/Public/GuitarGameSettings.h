@@ -61,6 +61,17 @@ struct REALGUITARGAME_API FGuitarSettingsData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|UX")
     bool bShowChordDiagrams = true;
 
+    // Character & Camera (0 = Quinn, 1 = Manny)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Character")
+    int32 CharacterModelIndex = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Character")
+    float CameraDistance = 260.0f;
+
+    // Live Play Chord Bank (0..2)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|UX")
+    int32 ChordBankIndex = 0;
+
     // Atmosphere
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Atmosphere")
     ESanctuaryMood AtmosphereMood = ESanctuaryMood::GoldenSunset;

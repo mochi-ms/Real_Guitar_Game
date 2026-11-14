@@ -61,13 +61,25 @@ public:
         bool bAutoPlay = true
     );
 
+    UFUNCTION(BlueprintPure, Category = "Guitar|Library")
+    static bool ResolveChordShape(const FString& Symbol, TArray<int32>& OutFrets, TArray<int32>& OutFingers);
+
+    UFUNCTION(BlueprintPure, Category = "Guitar|Library")
+    static int32 ComputeMidiNote(int32 StringIndex, int32 Fret);
+
+    UFUNCTION(BlueprintPure, Category = "Guitar|Library")
+    static int32 GetNumChordBanks();
+
+    UFUNCTION(BlueprintPure, Category = "Guitar|Library")
+    static FString GetChordBankName(int32 BankIndex);
+
+    UFUNCTION(BlueprintPure, Category = "Guitar|Library")
+    static TArray<FString> GetChordBankSymbols(int32 BankIndex);
+
     UPROPERTY(BlueprintAssignable, Category = "Guitar|Library")
     FOnSongLibraryUpdated OnSongLibraryUpdated;
 
 private:
-    static bool ResolveChordShape(const FString& Symbol, TArray<int32>& OutFrets, TArray<int32>& OutFingers);
-    static int32 ComputeMidiNote(int32 StringIndex, int32 Fret);
-
     TArray<FGuitarSongLibraryEntry> Songs;
     int32 CurrentIndex = INDEX_NONE;
 };

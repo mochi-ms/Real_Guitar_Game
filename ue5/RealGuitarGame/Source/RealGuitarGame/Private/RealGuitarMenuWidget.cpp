@@ -1,5 +1,7 @@
 #include "RealGuitarMenuWidget.h"
-
+#include "GuitarScoreSubsystem.h"
+#include "GuitarSongLibrarySubsystem.h"
+#include "GuitarUIStyle.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -8,458 +10,610 @@
 #include "Components/CheckBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/ScrollBox.h"
 #include "Components/Slider.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WidgetSwitcher.h"
-#include "Engine/GameInstance.h"
-#include "Engine/World.h"
-#include "GameFramework/PlayerController.h"
-#include "GuitarScoreSubsystem.h"
-#include "GuitarSongLibrarySubsystem.h"
-#include "GuitarUIStyle.h"
-#include "InputCoreTypes.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 namespace
 {
-    constexpr float GFpsChoices[] = { 30.0f, 60.0f, 120.0f, 144.0f, 0.0f };
-    constexpr int32 GNumFpsChoices = 5;
+    const float kFpsChoices[] = { 0.0f, 30.0f, 60.0f, 120.0f, 144.0f };
+    constexpr int32 kNumFpsChoices = UE_ARRAY_COUNT(kFpsChoices);
 
-    FText FormatFpsText(float Limit)
+    UButton* MakeMutableLabelButton(
+        UWidgetTree* Tree,
+        UPanelWidget* ParentBox,
+        const FText& InitialText,
+        TObjectPtr<UTextBlock>& OutLabel,
+        bool bPrimaryAccent,
+        int32 FontSize = 14,
+        FMargin Padding = FMargin(16.0f, 9.0f)
+    )
     {
-        if (Limit <= 0.0f)
+        UButton* Btn = Tree->ConstructWidget<UButton>(UButton::StaticClass());
+        FButtonStyle Style = Btn->GetStyle();
+        const FLinearColor NormalTint = bPrimaryAccent ? GuitarUIStyle::AccentGoldDim : GuitarUIStyle::ButtonSecondary;
+        const FLinearColor HoverTint = bPrimaryAccent ? GuitarUIStyle::AccentGold : GuitarUIStyle::ButtonHover;
+        const FLinearColor PressTint = NormalTint * 0.85f;
+        Style.SetNormal(GuitarUIStyle::MakeGlassBoxBrush(NormalTint));
+        Style.SetHovered(GuitarUIStyle::MakeGlassBoxBrush(HoverTint));
+        Style.SetPressed(GuitarUIStyle::MakeGlassBoxBrush(PressTint));
+        Style.SetNormalPadding(Padding);
+        Style.SetPressedPadding(Padding + FMargin(0.0f, 1.0f, 0.0f, -1.0f));
+        Btn->SetStyle(Style);
+
+        UTextBlock* Label = GuitarUIStyle::MakeText(
+            Tree,
+            InitialText,
+            FontSize,
+            bPrimaryAccent ? FLinearColor(0.99f, 0.97f, 0.93f, 1.0f) : GuitarUIStyle::TextPrimary,
+            true
+        );
+        OutLabel = Label;
+        Btn->AddChild(Label);
+
+        if (ParentBox)
         {
-            return NSLOCTEXT("GuitarMenu", "FpsUnlim", "무제한 (Unlimited)");
+            ParentBox->AddChild(Btn);
         }
-        return FText::FromString(FString::Printf(TEXT("%.0f FPS"), Limit));
+        return Btn;
     }
 
-    FText FormatWindowModeText(int32 Mode)
+    void AddStepperRowPtr(
+        UWidgetTree* Tree,
+        UPanelWidget* ParentBox,
+        const FText& TitleText,
+        TObjectPtr<UButton>& OutPrevBtn,
+        TObjectPtr<UTextBlock>& OutValueText,
+        TObjectPtr<UButton>& OutNextBtn
+    )
     {
-        switch (Mode)
+        UButton* PrevPtr = nullptr;
+        UTextBlock* ValPtr = nullptr;
+        UButton* NextPtr = nullptr;
+        GuitarUIStyle::AddStepperRow(Tree, ParentBox, TitleText, PrevPtr, ValPtr, NextPtr);
+        OutPrevBtn = PrevPtr;
+        OutValueText = ValPtr;
+        OutNextBtn = NextPtr;
+    }
+
+    void AddSliderRowPtr(
+        UWidgetTree* Tree,
+        UPanelWidget* ParentBox,
+        const FText& TitleText,
+        TObjectPtr<USlider>& OutSlider,
+        TObjectPtr<UTextBlock>& OutValueText,
+        float MinVal,
+        float MaxVal,
+        float StepSize
+    )
+    {
+        USlider* SliderPtr = nullptr;
+        UTextBlock* ValPtr = nullptr;
+        GuitarUIStyle::AddSettingSliderRow(Tree, ParentBox, TitleText, SliderPtr, ValPtr, MinVal, MaxVal, StepSize);
+        OutSlider = SliderPtr;
+        OutValueText = ValPtr;
+    }
+
+    void AddCheckRowPtr(
+        UWidgetTree* Tree,
+        UPanelWidget* ParentBox,
+        const FText& TitleText,
+        TObjectPtr<UCheckBox>& OutCheckBox
+    )
+    {
+        UCheckBox* CheckPtr = nullptr;
+        GuitarUIStyle::AddCheckBoxRow(Tree, ParentBox, TitleText, CheckPtr);
+        OutCheckBox = CheckPtr;
+    }
+
+    void AddKeybindRow(UWidgetTree* Tree, UPanelWidget* ParentBox, const FString& KeyText, const FString& ActionText)
+    {
+        UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+
+        UBorder* Badge = GuitarUIStyle::MakeGlassCard(
+            Tree,
+            GuitarUIStyle::MakeText(Tree, FText::FromString(KeyText), 11, GuitarUIStyle::AccentGold, true),
+            FMargin(8.0f, 3.0f),
+            FLinearColor(0.11f, 0.12f, 0.17f, 0.96f)
+        );
+        if (UHorizontalBoxSlot* KeySlot = Row->AddChildToHorizontalBox(Badge))
         {
-        case 0:
-            return NSLOCTEXT("GuitarMenu", "WinFull", "전체화면 (Fullscreen)");
-        case 2:
-            return NSLOCTEXT("GuitarMenu", "WinWindow", "창모드 (Windowed)");
-        default:
-            return NSLOCTEXT("GuitarMenu", "WinBorderless", "테두리 없는 창");
+            KeySlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+            KeySlot->SetVerticalAlignment(VAlign_Center);
+            KeySlot->SetPadding(FMargin(0.0f, 0.0f, 10.0f, 0.0f));
         }
-    }
-}
 
-#define BIND_BTN_CLICKED(Btn, Method) \
-    if ((Btn) && !(Btn)->OnClicked.IsAlreadyBound(this, &URealGuitarMenuWidget::Method)) \
-    { \
-        (Btn)->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::Method); \
-    }
-
-TSharedRef<SWidget> URealGuitarMenuWidget::RebuildWidget()
-{
-    SetIsFocusable(true);
-    if (WidgetTree && !WidgetTree->RootWidget)
-    {
-        BuildDefaultMenuLayout();
-    }
-    return Super::RebuildWidget();
-}
-
-void URealGuitarMenuWidget::BuildDefaultMenuLayout()
-{
-    UCanvasPanel* RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("MenuRootCanvas"));
-    WidgetTree->RootWidget = RootCanvas;
-
-    // Full-screen translucent warm dark backdrop
-    UBorder* Backdrop = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Backdrop"));
-    Backdrop->SetBrushColor(GuitarUIStyle::BackdropScrim);
-    Backdrop->SetHorizontalAlignment(HAlign_Center);
-    Backdrop->SetVerticalAlignment(VAlign_Center);
-    if (UCanvasPanelSlot* BgSlot = RootCanvas->AddChildToCanvas(Backdrop))
-    {
-        BgSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
-        BgSlot->SetOffsets(FMargin(0.0f));
-    }
-
-    UVerticalBox* ShellVBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-
-    // Header
-    HeroTitleText = GuitarUIStyle::MakeText(
-        WidgetTree,
-        NSLOCTEXT("GuitarMenu", "HeroTitle", "REAL GUITAR SANCTUARY"),
-        28,
-        GuitarUIStyle::AccentGold,
-        true
-    );
-    HeroSubtitleText = GuitarUIStyle::MakeText(
-        WidgetTree,
-        NSLOCTEXT("GuitarMenu", "HeroSub", "실사 배경 속에서 감상하는 1인칭 오토 기타 연주 공간"),
-        13,
-        GuitarUIStyle::TextMuted
-    );
-    ShellVBox->AddChildToVerticalBox(HeroTitleText);
-    if (UVerticalBoxSlot* SubSlot = ShellVBox->AddChildToVerticalBox(HeroSubtitleText))
-    {
-        SubSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 16.0f));
-    }
-
-    // Top Navigation Tabs
-    UHorizontalBox* TabRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    TabMainButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabMain", "메인 · 악보"), true, 13);
-    TabGraphicsButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabGfx", "화면 · 그래픽"), false, 13);
-    TabAudioButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabAudio", "사운드 · 분위기"), false, 13);
-    TabControlsButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabCtrl", "조작 · 키 안내"), false, 13);
-
-    for (UButton* TabBtn : { TabMainButton.Get(), TabGraphicsButton.Get(), TabAudioButton.Get(), TabControlsButton.Get() })
-    {
-        if (UHorizontalBoxSlot* TSlot = TabRow->AddChildToHorizontalBox(TabBtn))
+        UTextBlock* Desc = GuitarUIStyle::MakeText(Tree, FText::FromString(ActionText), 12, GuitarUIStyle::TextPrimary, false);
+        if (UHorizontalBoxSlot* DescSlot = Row->AddChildToHorizontalBox(Desc))
         {
-            TSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-            TSlot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
+            DescSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+            DescSlot->SetVerticalAlignment(VAlign_Center);
         }
-    }
-    if (UVerticalBoxSlot* TRowSlot = ShellVBox->AddChildToVerticalBox(TabRow))
-    {
-        TRowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 16.0f));
-    }
 
-    // Tab Pages
-    ContentSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass());
-    ContentSwitcher->AddChild(BuildMainAndSongsTab());
-    ContentSwitcher->AddChild(BuildGraphicsTab());
-    ContentSwitcher->AddChild(BuildAudioAndMoodTab());
-    ContentSwitcher->AddChild(BuildControlsTab());
-
-    if (UVerticalBoxSlot* SwitchSlot = ShellVBox->AddChildToVerticalBox(ContentSwitcher))
-    {
-        SwitchSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-    }
-
-    // Footer Action Bar
-    UHorizontalBox* FooterRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    PrimaryActionButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "Resume", "계속 감상"), PrimaryActionLabel, true, 14, FMargin(22.0f, 9.0f));
-    BackToTitleButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "BackTitle", "타이틀 화면"), false, 13);
-    QuitButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "Quit", "게임 종료"), false, 13);
-
-    if (UHorizontalBoxSlot* S1 = FooterRow->AddChildToHorizontalBox(PrimaryActionButton))
-    {
-        S1->SetPadding(FMargin(0.0f, 0.0f, 10.0f, 0.0f));
-    }
-    if (UHorizontalBoxSlot* S2 = FooterRow->AddChildToHorizontalBox(BackToTitleButton))
-    {
-        S2->SetPadding(FMargin(0.0f, 0.0f, 10.0f, 0.0f));
-    }
-    GuitarUIStyle::AddSpacer(WidgetTree, FooterRow, 20.0f, 1.0f);
-    if (UHorizontalBoxSlot* S3 = FooterRow->AddChildToHorizontalBox(QuitButton))
-    {
-        S3->SetHorizontalAlignment(HAlign_Right);
-    }
-
-    if (UVerticalBoxSlot* FSlot = ShellVBox->AddChildToVerticalBox(FooterRow))
-    {
-        FSlot->SetPadding(FMargin(0.0f, 18.0f, 0.0f, 0.0f));
-    }
-
-    UBorder* MainCard = GuitarUIStyle::MakeGlassCard(WidgetTree, ShellVBox, FMargin(32.0f, 28.0f));
-    Backdrop->SetContent(MainCard);
-}
-
-UWidget* URealGuitarMenuWidget::BuildMainAndSongsTab()
-{
-    UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-
-    Box->AddChildToVerticalBox(GuitarUIStyle::MakeText(
-        WidgetTree, NSLOCTEXT("GuitarMenu", "SecSongs", "현재 연주곡 / 악보 라이브러리"), 15, GuitarUIStyle::AccentGold, true));
-
-    GuitarUIStyle::AddStepperRow(
-        WidgetTree, Box, NSLOCTEXT("GuitarMenu", "ActiveSong", "선택된 악보"),
-        SongPrevButton, SongNameValueText, SongNextButton
-    );
-
-    UHorizontalBox* PlaybackRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    SongPlayPauseButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TogglePlay", "재생 / 일시정지"), true, 13);
-    PlaybackRow->AddChildToHorizontalBox(SongPlayPauseButton);
-    Box->AddChildToVerticalBox(PlaybackRow);
-
-    GuitarUIStyle::AddCheckBoxRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "LoopToggle", "현재 곡 반복 재생 (Loop)"), LoopSongCheckBox);
-
-    GuitarUIStyle::AddSpacer(WidgetTree, Box, 1.0f, 14.0f);
-    Box->AddChildToVerticalBox(GuitarUIStyle::MakeText(
-        WidgetTree, NSLOCTEXT("GuitarMenu", "SecQuickJam", "즉석 반주 패턴 (코드/아르페지오/스트로크)"), 15, GuitarUIStyle::AccentGold, true));
-
-    UHorizontalBox* JamRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    JamBalladButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "JamBallad", "어쿠스틱 발라드 (C-G-Am-F)"), false, 12);
-    JamFingerButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "JamFinger", "핑거스타일 아르페지오 (D-A-Bm-G)"), false, 12);
-    JamPopButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "JamPop", "감성 팝 스트로크 (Em-C-G-D)"), false, 12);
-
-    for (UButton* Btn : { JamBalladButton.Get(), JamFingerButton.Get(), JamPopButton.Get() })
-    {
-        if (UHorizontalBoxSlot* HSlot = JamRow->AddChildToHorizontalBox(Btn))
+        if (UVerticalBox* VBox = Cast<UVerticalBox>(ParentBox))
         {
-            HSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-            HSlot->SetPadding(FMargin(0.0f, 8.0f, 8.0f, 0.0f));
+            if (UVerticalBoxSlot* RowSlot = VBox->AddChildToVerticalBox(Row))
+            {
+                RowSlot->SetPadding(FMargin(0.0f, 2.5f));
+            }
+        }
+        else if (ParentBox)
+        {
+            ParentBox->AddChild(Row);
         }
     }
-    Box->AddChildToVerticalBox(JamRow);
 
-    return GuitarUIStyle::MakeGlassCard(WidgetTree, Box, FMargin(20.0f, 18.0f), GuitarUIStyle::CardSurface);
-}
-
-UWidget* URealGuitarMenuWidget::BuildGraphicsTab()
-{
-    UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-
-    GuitarUIStyle::AddStepperRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "Res", "해상도 (Resolution)"), ResPrevButton, ResValueText, ResNextButton);
-    GuitarUIStyle::AddStepperRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "WinMode", "화면 모드 (Window Mode)"), WinModePrevButton, WinModeValueText, WinModeNextButton);
-    GuitarUIStyle::AddStepperRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "FpsCap", "최대 프레임 (FPS Cap)"), FpsPrevButton, FpsValueText, FpsNextButton);
-    GuitarUIStyle::AddStepperRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "Quality", "그래픽 프리셋 (Scalability)"), QualityPrevButton, QualityValueText, QualityNextButton);
-    GuitarUIStyle::AddCheckBoxRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "VSync", "수직 동기화 (VSync)"), VSyncCheckBox);
-    GuitarUIStyle::AddCheckBoxRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "Lumen", "Lumen 전역 조명 & 반사 활성화"), LumenCheckBox);
-
-    UHorizontalBox* ActionRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    ApplyGraphicsButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "ApplyGfx", "그래픽 적용 및 저장"), true, 13);
-    ResetDefaultsButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "ResetDef", "기본값 복원"), false, 13);
-
-    if (UHorizontalBoxSlot* S1 = ActionRow->AddChildToHorizontalBox(ApplyGraphicsButton))
+    UBorder* MakeSectionCard(UWidgetTree* Tree, const FText& TitleText, UVerticalBox*& OutBodyBox)
     {
-        S1->SetPadding(FMargin(0.0f, 10.0f, 10.0f, 0.0f));
-    }
-    if (UHorizontalBoxSlot* S2 = ActionRow->AddChildToHorizontalBox(ResetDefaultsButton))
-    {
-        S2->SetPadding(FMargin(0.0f, 10.0f, 10.0f, 0.0f));
-    }
-    Box->AddChildToVerticalBox(ActionRow);
-
-    GraphicsStatusText = GuitarUIStyle::MakeText(WidgetTree, FText::GetEmpty(), 12, GuitarUIStyle::AccentGold);
-    Box->AddChildToVerticalBox(GraphicsStatusText);
-
-    return GuitarUIStyle::MakeGlassCard(WidgetTree, Box, FMargin(20.0f, 18.0f), GuitarUIStyle::CardSurface);
-}
-
-UWidget* URealGuitarMenuWidget::BuildAudioAndMoodTab()
-{
-    UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-
-    GuitarUIStyle::AddSettingSliderRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "MasterVol", "마스터 볼륨"), 0.0f, 1.0f, 0.01f, MasterVolSlider, MasterVolValueText);
-    GuitarUIStyle::AddSettingSliderRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "GuitarVol", "기타 사운드 볼륨"), 0.0f, 1.0f, 0.01f, GuitarVolSlider, GuitarVolValueText);
-    GuitarUIStyle::AddSettingSliderRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "AmbientVol", "환경음(자연/빗소리) 볼륨"), 0.0f, 1.0f, 0.01f, AmbientVolSlider, AmbientVolValueText);
-    GuitarUIStyle::AddSettingSliderRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "ReverbMix", "공간감 리버브 (Reverb)"), 0.0f, 1.0f, 0.01f, ReverbSlider, ReverbValueText);
-
-    GuitarUIStyle::AddSpacer(WidgetTree, Box, 1.0f, 10.0f);
-    CurrentMoodLabel = GuitarUIStyle::MakeText(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodHeader", "시간대 · 분위기 프리셋"), 14, GuitarUIStyle::AccentGold, true);
-    Box->AddChildToVerticalBox(CurrentMoodLabel);
-
-    UHorizontalBox* MoodRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    MoodSunsetButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodSunset", "황금빛 노을"), false, 12);
-    MoodNightButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodNight", "아늑한 밤 램프"), false, 12);
-    MoodMorningButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodMorn", "아침 물안개"), false, 12);
-    MoodRainButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodRain", "비 오는 로파이"), false, 12);
-
-    for (UButton* Btn : { MoodSunsetButton.Get(), MoodNightButton.Get(), MoodMorningButton.Get(), MoodRainButton.Get() })
-    {
-        if (UHorizontalBoxSlot* HSlot = MoodRow->AddChildToHorizontalBox(Btn))
+        OutBodyBox = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+        UTextBlock* Title = GuitarUIStyle::MakeText(Tree, TitleText, 13, GuitarUIStyle::AccentGold, true);
+        if (UVerticalBoxSlot* TitleSlot = OutBodyBox->AddChildToVerticalBox(Title))
         {
-            HSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-            HSlot->SetPadding(FMargin(0.0f, 6.0f, 6.0f, 6.0f));
+            TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
         }
+        return GuitarUIStyle::MakeGlassCard(Tree, OutBodyBox, FMargin(14.0f, 10.0f), GuitarUIStyle::CardSurface);
     }
-    Box->AddChildToVerticalBox(MoodRow);
-
-    GuitarUIStyle::AddCheckBoxRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "ShowChords", "연주 중 코드 배지 표시"), ShowChordsCheckBox);
-    GuitarUIStyle::AddCheckBoxRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "AutoHide", "벤치 착석 시 HUD 자동 숨김 (몰입 모드)"), AutoHideHudCheckBox);
-
-    return GuitarUIStyle::MakeGlassCard(WidgetTree, Box, FMargin(20.0f, 18.0f), GuitarUIStyle::CardSurface);
-}
-
-UWidget* URealGuitarMenuWidget::BuildControlsTab()
-{
-    UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-
-    GuitarUIStyle::AddSettingSliderRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "MouseSens", "마우스 시점 감도"), 0.2f, 3.0f, 0.05f, MouseSensSlider, MouseSensValueText);
-    GuitarUIStyle::AddSettingSliderRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "Fov", "시야각 (FOV)"), 60.0f, 105.0f, 1.0f, FovSlider, FovValueText);
-    GuitarUIStyle::AddCheckBoxRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "InvertY", "마우스 Y축 반전 (Invert Y)"), InvertYCheckBox);
-
-    GuitarUIStyle::AddSpacer(WidgetTree, Box, 1.0f, 12.0f);
-    Box->AddChildToVerticalBox(GuitarUIStyle::MakeText(
-        WidgetTree,
-        NSLOCTEXT(
-            "GuitarMenu",
-            "KeybindGuide",
-            "조작 키 안내:\n"
-            "  • W / A / S / D : 공간 자유 이동\n"
-            "  • E : 벤치·의자 앉기 / 일어나기\n"
-            "  • Space : 연주 재생 / 일시정지\n"
-            "  • C : 카메라 앵글 전환 (전체 / 왼손 프렛 / 오른손 피킹)\n"
-            "  • N : 다음 악보 전환   ·   T : 분위기 프리셋 전환\n"
-            "  • H : 시네마틱 HUD 숨기기   ·   ESC : 일시정지 / 환경설정"
-        ),
-        13,
-        GuitarUIStyle::TextMuted
-    ));
-
-    return GuitarUIStyle::MakeGlassCard(WidgetTree, Box, FMargin(20.0f, 18.0f), GuitarUIStyle::CardSurface);
 }
 
 void URealGuitarMenuWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    BIND_BTN_CLICKED(PrimaryActionButton, HandleResumeOrStartClicked);
-    BIND_BTN_CLICKED(BackToTitleButton, HandleBackToTitleClicked);
-    BIND_BTN_CLICKED(QuitButton, HandleQuitClicked);
+    ResolutionChoices = UGuitarGameSettingsSubsystem::GetSupportedResolutions();
 
-    BIND_BTN_CLICKED(TabMainButton, HandleTabMainClicked);
-    BIND_BTN_CLICKED(TabGraphicsButton, HandleTabGraphicsClicked);
-    BIND_BTN_CLICKED(TabAudioButton, HandleTabAudioClicked);
-    BIND_BTN_CLICKED(TabControlsButton, HandleTabControlsClicked);
-
-    BIND_BTN_CLICKED(SongPrevButton, HandleSongPrevClicked);
-    BIND_BTN_CLICKED(SongNextButton, HandleSongNextClicked);
-    BIND_BTN_CLICKED(SongPlayPauseButton, HandlePlayPauseClicked);
-    BIND_BTN_CLICKED(JamBalladButton, HandleJamBalladClicked);
-    BIND_BTN_CLICKED(JamFingerButton, HandleJamFingerstyleClicked);
-    BIND_BTN_CLICKED(JamPopButton, HandleJamPopGrooveClicked);
-
-    BIND_BTN_CLICKED(ResPrevButton, HandleResPrevClicked);
-    BIND_BTN_CLICKED(ResNextButton, HandleResNextClicked);
-    BIND_BTN_CLICKED(WinModePrevButton, HandleWinModePrevClicked);
-    BIND_BTN_CLICKED(WinModeNextButton, HandleWinModeNextClicked);
-    BIND_BTN_CLICKED(FpsPrevButton, HandleFpsPrevClicked);
-    BIND_BTN_CLICKED(FpsNextButton, HandleFpsNextClicked);
-    BIND_BTN_CLICKED(QualityPrevButton, HandleQualityPrevClicked);
-    BIND_BTN_CLICKED(QualityNextButton, HandleQualityNextClicked);
-    BIND_BTN_CLICKED(ApplyGraphicsButton, HandleApplyGraphicsClicked);
-    BIND_BTN_CLICKED(ResetDefaultsButton, HandleResetDefaultsClicked);
-
-    BIND_BTN_CLICKED(MoodSunsetButton, HandleMoodSunsetClicked);
-    BIND_BTN_CLICKED(MoodNightButton, HandleMoodNightClicked);
-    BIND_BTN_CLICKED(MoodMorningButton, HandleMoodMorningClicked);
-    BIND_BTN_CLICKED(MoodRainButton, HandleMoodRainClicked);
-
-    if (LoopSongCheckBox && !LoopSongCheckBox->OnCheckStateChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleLoopToggled))
+    if (!RootBackdrop && WidgetTree)
     {
-        LoopSongCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleLoopToggled);
-    }
-    if (VSyncCheckBox && !VSyncCheckBox->OnCheckStateChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleVSyncToggled))
-    {
-        VSyncCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleVSyncToggled);
-    }
-    if (LumenCheckBox && !LumenCheckBox->OnCheckStateChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleLumenToggled))
-    {
-        LumenCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleLumenToggled);
-    }
-    if (ShowChordsCheckBox && !ShowChordsCheckBox->OnCheckStateChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleShowChordsToggled))
-    {
-        ShowChordsCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleShowChordsToggled);
-    }
-    if (AutoHideHudCheckBox && !AutoHideHudCheckBox->OnCheckStateChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleAutoHideHudToggled))
-    {
-        AutoHideHudCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleAutoHideHudToggled);
-    }
-    if (InvertYCheckBox && !InvertYCheckBox->OnCheckStateChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleInvertYToggled))
-    {
-        InvertYCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleInvertYToggled);
+        BuildMenuLayout();
     }
 
-    if (MasterVolSlider && !MasterVolSlider->OnValueChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleMasterVolChanged))
-    {
-        MasterVolSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleMasterVolChanged);
-    }
-    if (GuitarVolSlider && !GuitarVolSlider->OnValueChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleGuitarVolChanged))
-    {
-        GuitarVolSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleGuitarVolChanged);
-    }
-    if (AmbientVolSlider && !AmbientVolSlider->OnValueChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleAmbientVolChanged))
-    {
-        AmbientVolSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleAmbientVolChanged);
-    }
-    if (ReverbSlider && !ReverbSlider->OnValueChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleReverbChanged))
-    {
-        ReverbSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleReverbChanged);
-    }
-    if (MouseSensSlider && !MouseSensSlider->OnValueChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleMouseSensChanged))
-    {
-        MouseSensSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleMouseSensChanged);
-    }
-    if (FovSlider && !FovSlider->OnValueChanged.IsAlreadyBound(this, &URealGuitarMenuWidget::HandleFovChanged))
-    {
-        FovSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleFovChanged);
-    }
+    SetVisibility(ESlateVisibility::Collapsed);
+    bMenuOpen = false;
 }
 
-FReply URealGuitarMenuWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+UScrollBox* URealGuitarMenuWidget::CreateTabScrollContainer()
 {
-    if (InKeyEvent.GetKey() == EKeys::Escape && CurrentMode == ERealGuitarMenuMode::PauseMenu && bMenuOpen)
+    UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
+    Scroll->SetAnimateWheelScrolling(true);
+    return Scroll;
+}
+
+void URealGuitarMenuWidget::BuildMenuLayout()
+{
+    UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass());
+    WidgetTree->RootWidget = Canvas;
+
+    RootBackdrop = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+    RootBackdrop->SetBrushColor(GuitarUIStyle::TitleScrim);
+    if (UCanvasPanelSlot* BgSlot = Canvas->AddChildToCanvas(RootBackdrop))
     {
-        CloseMenu();
-        return FReply::Handled();
+        BgSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+        BgSlot->SetOffsets(FMargin(0.0f));
     }
-    return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+
+    UCanvasPanel* BackdropCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass());
+    RootBackdrop->SetContent(BackdropCanvas);
+
+    UVerticalBox* PanelRoot = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+    MainPanelBorder = GuitarUIStyle::MakeGlassCard(WidgetTree, PanelRoot, FMargin(22.0f, 18.0f), GuitarUIStyle::GlassPanel);
+    MainPanelSlot = BackdropCanvas->AddChildToCanvas(MainPanelBorder);
+    if (MainPanelSlot)
+    {
+        MainPanelSlot->SetAnchors(FAnchors(0.03f, 0.05f, 0.45f, 0.95f));
+        MainPanelSlot->SetOffsets(FMargin(0.0f));
+    }
+
+    UHorizontalBox* HeaderRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+    PanelRoot->AddChildToVerticalBox(HeaderRow);
+
+    UVerticalBox* BrandCol = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+    HeroTitleText = GuitarUIStyle::MakeText(WidgetTree, FText::FromString(TEXT("REAL GUITAR SANCTUARY")), 24, GuitarUIStyle::TextPrimary, true);
+    HeroSubtitleText = GuitarUIStyle::MakeText(
+        WidgetTree,
+        FText::FromString(TEXT("호숫가 정자 · 어쿠스틱 라이브 시뮬레이션")),
+        12,
+        GuitarUIStyle::AccentGold,
+        false
+    );
+    BrandCol->AddChildToVerticalBox(HeroTitleText);
+    BrandCol->AddChildToVerticalBox(HeroSubtitleText);
+    if (UHorizontalBoxSlot* BrandSlot = HeaderRow->AddChildToHorizontalBox(BrandCol))
+    {
+        BrandSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+        BrandSlot->SetVerticalAlignment(VAlign_Center);
+    }
+
+    UHorizontalBox* TopActions = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+    if (UHorizontalBoxSlot* ActionsSlot = HeaderRow->AddChildToHorizontalBox(TopActions))
+    {
+        ActionsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+        ActionsSlot->SetVerticalAlignment(VAlign_Center);
+    }
+
+    PrimaryActionButton = MakeMutableLabelButton(
+        WidgetTree,
+        TopActions,
+        FText::FromString(TEXT("산책 & 연주 시작")),
+        PrimaryActionLabel,
+        true,
+        14,
+        FMargin(16.0f, 8.0f)
+    );
+    PrimaryActionButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleResumeOrStartClicked);
+    GuitarUIStyle::AddSpacer(WidgetTree, TopActions, 6.0f, 1.0f);
+
+    BackToTitleButton = GuitarUIStyle::MakeButton(
+        WidgetTree,
+        TopActions,
+        FText::FromString(TEXT("타이틀")),
+        false,
+        12,
+        FMargin(11.0f, 8.0f)
+    );
+    BackToTitleButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleBackToTitleClicked);
+    GuitarUIStyle::AddSpacer(WidgetTree, TopActions, 6.0f, 1.0f);
+
+    QuitButton = GuitarUIStyle::MakeButton(
+        WidgetTree,
+        TopActions,
+        FText::FromString(TEXT("종료")),
+        false,
+        12,
+        FMargin(11.0f, 8.0f)
+    );
+    QuitButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleQuitClicked);
+
+    GuitarUIStyle::AddSpacer(WidgetTree, PanelRoot, 1.0f, 10.0f);
+
+    UHorizontalBox* TabBar = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+    PanelRoot->AddChildToVerticalBox(TabBar);
+
+    auto AddTabBtn = [&](const TCHAR* IconPath, const FString& Label) -> UButton*
+    {
+        UButton* Btn = GuitarUIStyle::MakeIconButton(
+            WidgetTree,
+            TabBar,
+            IconPath,
+            FText::FromString(Label),
+            false,
+            15.0f,
+            13,
+            FMargin(12.0f, 7.0f)
+        );
+        if (UHorizontalBoxSlot* TabSlot = Cast<UHorizontalBoxSlot>(Btn->Slot))
+        {
+            TabSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+            TabSlot->SetPadding(FMargin(0.0f, 0.0f, 6.0f, 0.0f));
+        }
+        TabButtons.Add(Btn);
+        return Btn;
+    };
+
+    AddTabBtn(TEXT("/Game/UI/Textures/T_UI_Play"), TEXT("연주 & 곡"))->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleTabMainClicked);
+    AddTabBtn(TEXT("/Game/UI/Textures/T_UI_Settings"), TEXT("그래픽"))->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleTabGraphicsClicked);
+    AddTabBtn(TEXT("/Game/UI/Textures/T_UI_MoodSunset"), TEXT("오디오 & 분위기"))->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleTabAudioClicked);
+    AddTabBtn(TEXT("/Game/UI/Textures/T_UI_Camera"), TEXT("카메라 & 조작"))->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleTabControlsClicked);
+
+    GuitarUIStyle::AddSpacer(WidgetTree, PanelRoot, 1.0f, 10.0f);
+
+    ContentSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass());
+    if (UVerticalBoxSlot* SwitchSlot = PanelRoot->AddChildToVerticalBox(ContentSwitcher))
+    {
+        SwitchSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+    }
+
+    // ==================== TAB 0: Main, Performer, Live Mode & Songs ====================
+    UScrollBox* Tab0Scroll = CreateTabScrollContainer();
+    UVerticalBox* Tab0 = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+    Tab0Scroll->AddChild(Tab0);
+    ContentSwitcher->AddChild(Tab0Scroll);
+
+    UVerticalBox* CardPerf = nullptr;
+    Tab0->AddChildToVerticalBox(MakeSectionCard(WidgetTree, FText::FromString(TEXT("연주자 · 실시간 모드")), CardPerf));
+
+    AddStepperRowPtr(
+        WidgetTree,
+        CardPerf,
+        FText::FromString(TEXT("캐릭터 외형 (실시간 반영)")),
+        CharacterPrevButton,
+        CharacterValueText,
+        CharacterNextButton
+    );
+    CharacterPrevButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleCharacterPrevClicked);
+    CharacterNextButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleCharacterNextClicked);
+
+    UHorizontalBox* ModeRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+    CardPerf->AddChildToVerticalBox(ModeRow);
+    UTextBlock* ModeLabel = GuitarUIStyle::MakeText(WidgetTree, FText::FromString(TEXT("연주 방식 [M]")), 13, GuitarUIStyle::TextMuted);
+    if (UHorizontalBoxSlot* ModeLblSlot = ModeRow->AddChildToHorizontalBox(ModeLabel))
+    {
+        ModeLblSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+        ModeLblSlot->SetVerticalAlignment(VAlign_Center);
+    }
+    PlayModeValueText = GuitarUIStyle::MakeText(WidgetTree, FText::FromString(TEXT("직접 연주 (Free Play)")), 13, GuitarUIStyle::AccentTeal, true);
+    if (UHorizontalBoxSlot* ModeValSlot = ModeRow->AddChildToHorizontalBox(PlayModeValueText))
+    {
+        ModeValSlot->SetVerticalAlignment(VAlign_Center);
+        ModeValSlot->SetPadding(FMargin(8.0f, 0.0f));
+    }
+    TogglePlayModeButton = GuitarUIStyle::MakeButton(WidgetTree, ModeRow, FText::FromString(TEXT("모드 전환")), true, 12, FMargin(11.0f, 5.0f));
+    TogglePlayModeButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleTogglePlayModeClicked);
+
+    AddStepperRowPtr(
+        WidgetTree,
+        CardPerf,
+        FText::FromString(TEXT("코드 뱅크 [ [ / ] ]")),
+        ChordBankPrevButton,
+        ChordBankValueText,
+        ChordBankNextButton
+    );
+    ChordBankPrevButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleChordBankPrevClicked);
+    ChordBankNextButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleChordBankNextClicked);
+
+    GuitarUIStyle::AddSpacer(WidgetTree, Tab0, 1.0f, 8.0f);
+
+    UVerticalBox* CardSongs = nullptr;
+    Tab0->AddChildToVerticalBox(MakeSectionCard(WidgetTree, FText::FromString(TEXT("곡 재생 & 즉흥 프리셋")), CardSongs));
+
+    SelectedSongText = GuitarUIStyle::MakeText(WidgetTree, FText::FromString(TEXT("악보를 불러오는 중...")), 14, GuitarUIStyle::TextPrimary, true);
+    CardSongs->AddChildToVerticalBox(SelectedSongText);
+    GuitarUIStyle::AddSpacer(WidgetTree, CardSongs, 1.0f, 6.0f);
+
+    UHorizontalBox* SongControls = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+    CardSongs->AddChildToVerticalBox(SongControls);
+    SongPrevButton = GuitarUIStyle::MakeIconButton(WidgetTree, SongControls, TEXT("/Game/UI/Textures/T_UI_Prev"), FText::FromString(TEXT("이전 곡")), false, 15.0f, 12);
+    GuitarUIStyle::AddSpacer(WidgetTree, SongControls, 6.0f, 1.0f);
+    PlayPauseButton = MakeMutableLabelButton(WidgetTree, SongControls, FText::FromString(TEXT("재생 / 일시정지")), PlayPauseLabelText, true, 13, FMargin(14.0f, 6.0f));
+    GuitarUIStyle::AddSpacer(WidgetTree, SongControls, 6.0f, 1.0f);
+    SongNextButton = GuitarUIStyle::MakeIconButton(WidgetTree, SongControls, TEXT("/Game/UI/Textures/T_UI_Next"), FText::FromString(TEXT("다음 곡")), false, 15.0f, 12);
+    GuitarUIStyle::AddSpacer(WidgetTree, SongControls, 10.0f, 1.0f);
+
+    LoopCheckBox = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass());
+    LoopCheckBox->SetIsChecked(true);
+    SongControls->AddChildToHorizontalBox(LoopCheckBox);
+    if (UHorizontalBoxSlot* LoopSlot = SongControls->AddChildToHorizontalBox(
+            GuitarUIStyle::MakeText(WidgetTree, FText::FromString(TEXT("반복 재생")), 12, GuitarUIStyle::TextMuted)))
+    {
+        LoopSlot->SetVerticalAlignment(VAlign_Center);
+        LoopSlot->SetPadding(FMargin(6.0f, 0.0f, 0.0f, 0.0f));
+    }
+
+    SongPrevButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleSongPrevClicked);
+    PlayPauseButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandlePlayPauseClicked);
+    SongNextButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleSongNextClicked);
+    LoopCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleLoopToggled);
+
+    GuitarUIStyle::AddSpacer(WidgetTree, CardSongs, 1.0f, 8.0f);
+    CardSongs->AddChildToVerticalBox(
+        GuitarUIStyle::MakeText(WidgetTree, FText::FromString(TEXT("즉시 잼 반주 생성 (클릭 시 자동 연주)")), 12, GuitarUIStyle::TextMuted));
+    GuitarUIStyle::AddSpacer(WidgetTree, CardSongs, 1.0f, 4.0f);
+
+    UHorizontalBox* JamRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+    CardSongs->AddChildToVerticalBox(JamRow);
+    JamBalladButton = GuitarUIStyle::MakeButton(WidgetTree, JamRow, FText::FromString(TEXT("어쿠스틱 발라드 (C-G-Am-F)")), false, 11, FMargin(9.0f, 6.0f));
+    GuitarUIStyle::AddSpacer(WidgetTree, JamRow, 5.0f, 1.0f);
+    JamFingerstyleButton = GuitarUIStyle::MakeButton(WidgetTree, JamRow, FText::FromString(TEXT("포크 핑거스타일 (Em-C-G-D)")), false, 11, FMargin(9.0f, 6.0f));
+    GuitarUIStyle::AddSpacer(WidgetTree, JamRow, 5.0f, 1.0f);
+    JamPopButton = GuitarUIStyle::MakeButton(WidgetTree, JamRow, FText::FromString(TEXT("선셋 칠 (Fmaj7-G-Em7-Am7)")), false, 11, FMargin(9.0f, 6.0f));
+
+    JamBalladButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleJamBalladClicked);
+    JamFingerstyleButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleJamFingerstyleClicked);
+    JamPopButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleJamPopGrooveClicked);
+
+    // ==================== TAB 1: Graphics & Display ====================
+    UScrollBox* Tab1Scroll = CreateTabScrollContainer();
+    UVerticalBox* Tab1 = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+    Tab1Scroll->AddChild(Tab1);
+    ContentSwitcher->AddChild(Tab1Scroll);
+
+    UVerticalBox* CardGraphics = nullptr;
+    Tab1->AddChildToVerticalBox(MakeSectionCard(WidgetTree, FText::FromString(TEXT("화면 & 그래픽 품질")), CardGraphics));
+
+    AddStepperRowPtr(WidgetTree, CardGraphics, FText::FromString(TEXT("해상도")), ResPrevButton, ResValueText, ResNextButton);
+    AddStepperRowPtr(WidgetTree, CardGraphics, FText::FromString(TEXT("화면 모드")), WinModePrevButton, WinModeValueText, WinModeNextButton);
+    AddStepperRowPtr(WidgetTree, CardGraphics, FText::FromString(TEXT("프레임 제한")), FpsPrevButton, FpsValueText, FpsNextButton);
+    AddStepperRowPtr(WidgetTree, CardGraphics, FText::FromString(TEXT("그래픽 프리셋")), QualityPrevButton, QualityValueText, QualityNextButton);
+    AddCheckRowPtr(WidgetTree, CardGraphics, FText::FromString(TEXT("수직 동기화 (VSync)")), VSyncCheckBox);
+    AddCheckRowPtr(WidgetTree, CardGraphics, FText::FromString(TEXT("Lumen 실시간 전역 조명")), LumenCheckBox);
+
+    ResPrevButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleResPrevClicked);
+    ResNextButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleResNextClicked);
+    WinModePrevButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleWinModePrevClicked);
+    WinModeNextButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleWinModeNextClicked);
+    FpsPrevButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleFpsPrevClicked);
+    FpsNextButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleFpsNextClicked);
+    QualityPrevButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleQualityPrevClicked);
+    QualityNextButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleQualityNextClicked);
+    VSyncCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleVSyncToggled);
+    LumenCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleLumenToggled);
+
+    GuitarUIStyle::AddSpacer(WidgetTree, CardGraphics, 1.0f, 8.0f);
+    UHorizontalBox* GfxActionRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+    CardGraphics->AddChildToVerticalBox(GfxActionRow);
+    ApplyGraphicsButton = GuitarUIStyle::MakeButton(WidgetTree, GfxActionRow, FText::FromString(TEXT("설정 적용 & 저장")), true, 13);
+    GuitarUIStyle::AddSpacer(WidgetTree, GfxActionRow, 8.0f, 1.0f);
+    ResetDefaultsButton = GuitarUIStyle::MakeButton(WidgetTree, GfxActionRow, FText::FromString(TEXT("기본값 복원")), false, 13);
+    ApplyGraphicsButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleApplyGraphicsClicked);
+    ResetDefaultsButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleResetDefaultsClicked);
+
+    GraphicsStatusText = GuitarUIStyle::MakeText(WidgetTree, FText::GetEmpty(), 12, GuitarUIStyle::AccentTeal);
+    CardGraphics->AddChildToVerticalBox(GraphicsStatusText);
+
+    // ==================== TAB 2: Audio & Sanctuary Mood ====================
+    UScrollBox* Tab2Scroll = CreateTabScrollContainer();
+    UVerticalBox* Tab2 = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+    Tab2Scroll->AddChild(Tab2);
+    ContentSwitcher->AddChild(Tab2Scroll);
+
+    UVerticalBox* CardAudio = nullptr;
+    Tab2->AddChildToVerticalBox(MakeSectionCard(WidgetTree, FText::FromString(TEXT("사운드 믹서")), CardAudio));
+    AddSliderRowPtr(WidgetTree, CardAudio, FText::FromString(TEXT("마스터 볼륨")), MasterVolSlider, MasterVolValueText, 0.0f, 1.0f, 0.01f);
+    AddSliderRowPtr(WidgetTree, CardAudio, FText::FromString(TEXT("어쿠스틱 기타 볼륨")), GuitarVolSlider, GuitarVolValueText, 0.0f, 1.0f, 0.01f);
+    AddSliderRowPtr(WidgetTree, CardAudio, FText::FromString(TEXT("자연 호수 · 모닥불 소리")), AmbientVolSlider, AmbientVolValueText, 0.0f, 1.0f, 0.01f);
+    AddSliderRowPtr(WidgetTree, CardAudio, FText::FromString(TEXT("홀 리버브 공간감")), ReverbSlider, ReverbValueText, 0.0f, 1.0f, 0.01f);
+
+    MasterVolSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleMasterVolChanged);
+    GuitarVolSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleGuitarVolChanged);
+    AmbientVolSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleAmbientVolChanged);
+    ReverbSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleReverbChanged);
+
+    GuitarUIStyle::AddSpacer(WidgetTree, Tab2, 1.0f, 8.0f);
+
+    UVerticalBox* CardMood = nullptr;
+    Tab2->AddChildToVerticalBox(MakeSectionCard(WidgetTree, FText::FromString(TEXT("시간대 분위기 [T] & HUD")), CardMood));
+    CurrentMoodLabel = GuitarUIStyle::MakeText(WidgetTree, FText::FromString(TEXT("현재 분위기: 황금빛 노을")), 13, GuitarUIStyle::TextPrimary, true);
+    CardMood->AddChildToVerticalBox(CurrentMoodLabel);
+    GuitarUIStyle::AddSpacer(WidgetTree, CardMood, 1.0f, 6.0f);
+
+    UHorizontalBox* MoodRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+    CardMood->AddChildToVerticalBox(MoodRow);
+    MoodSunsetButton = GuitarUIStyle::MakeIconButton(WidgetTree, MoodRow, TEXT("/Game/UI/Textures/T_UI_MoodSunset"), FText::FromString(TEXT("노을")), false, 15.0f, 12);
+    GuitarUIStyle::AddSpacer(WidgetTree, MoodRow, 5.0f, 1.0f);
+    MoodNightButton = GuitarUIStyle::MakeIconButton(WidgetTree, MoodRow, TEXT("/Game/UI/Textures/T_UI_MoodNight"), FText::FromString(TEXT("모닥불 밤")), false, 15.0f, 12);
+    GuitarUIStyle::AddSpacer(WidgetTree, MoodRow, 5.0f, 1.0f);
+    MoodMorningButton = GuitarUIStyle::MakeButton(WidgetTree, MoodRow, FText::FromString(TEXT("아침 안개")), false, 12, FMargin(10.0f, 6.0f));
+    GuitarUIStyle::AddSpacer(WidgetTree, MoodRow, 5.0f, 1.0f);
+    MoodRainButton = GuitarUIStyle::MakeButton(WidgetTree, MoodRow, FText::FromString(TEXT("비 오는 로파이")), false, 12, FMargin(10.0f, 6.0f));
+
+    MoodSunsetButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleMoodSunsetClicked);
+    MoodNightButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleMoodNightClicked);
+    MoodMorningButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleMoodMorningClicked);
+    MoodRainButton->OnClicked.AddDynamic(this, &URealGuitarMenuWidget::HandleMoodRainClicked);
+
+    AddCheckRowPtr(WidgetTree, CardMood, FText::FromString(TEXT("실시간 코드 · 지판 표시")), ShowChordsCheckBox);
+    AddCheckRowPtr(WidgetTree, CardMood, FText::FromString(TEXT("착석 시 비연주 HUD 최소화")), AutoHideHudCheckBox);
+    ShowChordsCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleShowChordsToggled);
+    AutoHideHudCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleAutoHideHudToggled);
+
+    // ==================== TAB 3: Camera & Complete Keybinds ====================
+    UScrollBox* Tab3Scroll = CreateTabScrollContainer();
+    UVerticalBox* Tab3 = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+    Tab3Scroll->AddChild(Tab3);
+    ContentSwitcher->AddChild(Tab3Scroll);
+
+    UVerticalBox* CardCam = nullptr;
+    Tab3->AddChildToVerticalBox(MakeSectionCard(WidgetTree, FText::FromString(TEXT("카메라 & 시점 감도")), CardCam));
+    AddSliderRowPtr(WidgetTree, CardCam, FText::FromString(TEXT("3인칭 카메라 거리 (cm)")), CamDistSlider, CamDistValueText, 140.0f, 460.0f, 5.0f);
+    AddSliderRowPtr(WidgetTree, CardCam, FText::FromString(TEXT("마우스 회전 감도")), MouseSensSlider, MouseSensValueText, 0.2f, 3.0f, 0.05f);
+    AddSliderRowPtr(WidgetTree, CardCam, FText::FromString(TEXT("시야각 (FOV)")), FovSlider, FovValueText, 65.0f, 110.0f, 1.0f);
+    AddCheckRowPtr(WidgetTree, CardCam, FText::FromString(TEXT("마우스 Y축 반전")), InvertYCheckBox);
+
+    CamDistSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleCamDistChanged);
+    MouseSensSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleMouseSensChanged);
+    FovSlider->OnValueChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleFovChanged);
+    InvertYCheckBox->OnCheckStateChanged.AddDynamic(this, &URealGuitarMenuWidget::HandleInvertYToggled);
+
+    GuitarUIStyle::AddSpacer(WidgetTree, Tab3, 1.0f, 8.0f);
+
+    UVerticalBox* CardKeys = nullptr;
+    Tab3->AddChildToVerticalBox(MakeSectionCard(WidgetTree, FText::FromString(TEXT("탐험 & 수동 기타 연주 조작 가이드")), CardKeys));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("W A S D"), TEXT("호숫가 산책 · 정자 이동"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("G"), TEXT("기타 들기 (연주 자세) / 등에 메기"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("E"), TEXT("정자 벤치 · 부두 스툴 · 모닥불 의자 착석 / 기립"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("1 ~ 8"), TEXT("코드 슬롯 선택 & 지판 운지 전환"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("[ / ]"), TEXT("코드 뱅크 변경 (Sunset / Campfire / Lo-Fi)"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("Space / 좌클릭"), TEXT("다운 스트럼 (6현 -> 1현 아르페지오)"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("우클릭"), TEXT("업 스트럼 (1현 -> 6현 스트럼)"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("U I O J K L"), TEXT("6번줄(E) ~ 1번줄(e) 개별 줄 튕기기"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("X / 휠클릭"), TEXT("어쿠스틱 퍼커시브 커팅 (Chuck)"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("M / P / N B"), TEXT("직접·자동 전환 / 재생·정지 / 다음·이전 곡"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("C / Q / T / H"), TEXT("6종 카메라 전환 / 커서 토글 / 분위기 / HUD"));
+    AddKeybindRow(WidgetTree, CardKeys, TEXT("Esc / Tab"), TEXT("이 설정 및 곡 라이브러리 메뉴 열기/닫기"));
+
+    SelectTab(0);
 }
 
 void URealGuitarMenuWidget::OpenMenu(ERealGuitarMenuMode InMode, int32 InitialTabIndex)
 {
     CurrentMode = InMode;
     bMenuOpen = true;
-    SetVisibility(ESlateVisibility::Visible);
 
-    const bool bIsTitle = (CurrentMode == ERealGuitarMenuMode::TitleScreen);
-    if (PrimaryActionLabel)
+    if (const UGuitarGameSettingsSubsystem* SettingsSub = GetSettingsSubsystem())
     {
-        PrimaryActionLabel->SetText(bIsTitle
-            ? NSLOCTEXT("GuitarMenu", "StartSanctuary", "감상 시작하기")
-            : NSLOCTEXT("GuitarMenu", "ResumePlay", "계속 감상하기"));
-    }
-    if (BackToTitleButton)
-    {
-        BackToTitleButton->SetVisibility(bIsTitle ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+        DraftSettings = SettingsSub->GetSettings();
     }
 
-    if (APlayerController* PC = GetOwningPlayer())
-    {
-        PC->SetShowMouseCursor(true);
-        PC->SetIgnoreMoveInput(true);
-        PC->SetIgnoreLookInput(true);
-        FInputModeGameAndUI Mode;
-        Mode.SetHideCursorDuringCapture(false);
-        Mode.SetWidgetToFocus(TakeWidget());
-        PC->SetInputMode(Mode);
-    }
-
-    SelectTab(InitialTabIndex);
+    RefreshModeChrome();
     SyncWidgetsFromSettings();
-    RefreshSongDisplay();
+    SelectTab(InitialTabIndex);
+    SetVisibility(ESlateVisibility::Visible);
 }
 
 void URealGuitarMenuWidget::CloseMenu()
 {
-    bMenuOpen = false;
-    SetVisibility(ESlateVisibility::Collapsed);
-
-    if (APlayerController* PC = GetOwningPlayer())
+    if (!bMenuOpen)
     {
-        PC->SetIgnoreMoveInput(false);
-        PC->SetIgnoreLookInput(false);
+        return;
     }
 
+    bMenuOpen = false;
+    SetVisibility(ESlateVisibility::Collapsed);
     OnMenuClosed.Broadcast();
 }
 
 void URealGuitarMenuWidget::SelectTab(int32 TabIndex)
 {
-    const int32 Clamped = FMath::Clamp(TabIndex, 0, 3);
+    const int32 ClampedIndex = FMath::Clamp(TabIndex, 0, TabButtons.Num() - 1);
     if (ContentSwitcher)
     {
-        ContentSwitcher->SetActiveWidgetIndex(Clamped);
+        ContentSwitcher->SetActiveWidgetIndex(ClampedIndex);
     }
-    UButton* Tabs[] = { TabMainButton.Get(), TabGraphicsButton.Get(), TabAudioButton.Get(), TabControlsButton.Get() };
-    for (int32 i = 0; i < 4; ++i)
+
+    for (int32 i = 0; i < TabButtons.Num(); ++i)
     {
-        if (Tabs[i])
+        if (!TabButtons[i])
         {
-            Tabs[i]->SetBackgroundColor(i == Clamped ? GuitarUIStyle::AccentGoldDim : GuitarUIStyle::ButtonSecondary);
+            continue;
         }
+        const bool bActive = (i == ClampedIndex);
+        FButtonStyle Style = TabButtons[i]->GetStyle();
+        Style.SetNormal(GuitarUIStyle::MakeGlassBoxBrush(bActive ? GuitarUIStyle::AccentGoldDim : GuitarUIStyle::ButtonSecondary));
+        Style.SetHovered(GuitarUIStyle::MakeGlassBoxBrush(bActive ? GuitarUIStyle::AccentGold : GuitarUIStyle::ButtonHover));
+        TabButtons[i]->SetStyle(Style);
+    }
+}
+
+void URealGuitarMenuWidget::RefreshModeChrome()
+{
+    const bool bTitle = (CurrentMode == ERealGuitarMenuMode::TitleScreen);
+    if (RootBackdrop)
+    {
+        RootBackdrop->SetBrushColor(bTitle ? GuitarUIStyle::TitleScrim : GuitarUIStyle::BackdropScrim);
+    }
+    if (MainPanelSlot)
+    {
+        if (bTitle)
+        {
+            MainPanelSlot->SetAnchors(FAnchors(0.03f, 0.05f, 0.45f, 0.95f));
+        }
+        else
+        {
+            MainPanelSlot->SetAnchors(FAnchors(0.16f, 0.07f, 0.84f, 0.93f));
+        }
+        MainPanelSlot->SetOffsets(FMargin(0.0f));
+    }
+    if (HeroTitleText)
+    {
+        HeroTitleText->SetText(FText::FromString(bTitle ? TEXT("REAL GUITAR SANCTUARY") : TEXT("일시 정지 · 환경 설정")));
+    }
+    if (HeroSubtitleText)
+    {
+        HeroSubtitleText->SetText(FText::FromString(
+            bTitle
+                ? TEXT("호숫가 정자와 숲속 모닥불에서 내 손으로 직접 어쿠스틱 기타를 연주하세요")
+                : TEXT("연주자 · 그래픽 · 오디오 · 조작 설정 변경 시 즉시 반영됩니다")
+        ));
+    }
+    if (PrimaryActionLabel)
+    {
+        PrimaryActionLabel->SetText(FText::FromString(bTitle ? TEXT("산책 & 연주 시작") : TEXT("계속 연주하기")));
+    }
+    if (BackToTitleButton)
+    {
+        BackToTitleButton->SetVisibility(bTitle ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
     }
 }
 
@@ -467,25 +621,11 @@ void URealGuitarMenuWidget::SyncWidgetsFromSettings()
 {
     bSyncingUI = true;
 
-    if (const UGameInstance* GI = GetGameInstance())
+    ResolutionIndex = FindClosestResolutionIndex(DraftSettings.Resolution);
+    FpsChoiceIndex = 2;
+    for (int32 i = 0; i < kNumFpsChoices; ++i)
     {
-        if (const UGuitarGameSettingsSubsystem* SettingsSub = GI->GetSubsystem<UGuitarGameSettingsSubsystem>())
-        {
-            DraftSettings = SettingsSub->GetSettings();
-        }
-    }
-
-    ResolutionChoices = UGuitarGameSettingsSubsystem::GetSupportedResolutions();
-    ResolutionIndex = ResolutionChoices.IndexOfByKey(DraftSettings.Resolution);
-    if (ResolutionIndex == INDEX_NONE)
-    {
-        ResolutionIndex = FMath::Min(2, FMath::Max(0, ResolutionChoices.Num() - 1));
-    }
-
-    FpsChoiceIndex = 1;
-    for (int32 i = 0; i < GNumFpsChoices; ++i)
-    {
-        if (FMath::IsNearlyEqual(DraftSettings.FrameRateLimit, GFpsChoices[i], 1.0f))
+        if (FMath::IsNearlyEqual(DraftSettings.FrameRateLimit, kFpsChoices[i], 1.0f))
         {
             FpsChoiceIndex = i;
             break;
@@ -494,81 +634,137 @@ void URealGuitarMenuWidget::SyncWidgetsFromSettings()
 
     if (ResValueText && ResolutionChoices.IsValidIndex(ResolutionIndex))
     {
-        const FIntPoint R = ResolutionChoices[ResolutionIndex];
-        ResValueText->SetText(FText::FromString(FString::Printf(TEXT("%d x %d"), R.X, R.Y)));
+        const FIntPoint& Res = ResolutionChoices[ResolutionIndex];
+        ResValueText->SetText(FText::FromString(FString::Printf(TEXT("%d x %d"), Res.X, Res.Y)));
     }
-    if (WinModeValueText) WinModeValueText->SetText(FormatWindowModeText(DraftSettings.WindowMode));
-    if (FpsValueText) FpsValueText->SetText(FormatFpsText(DraftSettings.FrameRateLimit));
-    if (QualityValueText) QualityValueText->SetText(UGuitarGameSettingsSubsystem::GetGraphicsPresetName(DraftSettings.GraphicsPreset));
+    if (WinModeValueText)
+    {
+        const TCHAR* ModeNames[] = { TEXT("전체 화면"), TEXT("테두리 없는 창모드"), TEXT("창모드") };
+        WinModeValueText->SetText(FText::FromString(ModeNames[FMath::Clamp(DraftSettings.WindowMode, 0, 2)]));
+    }
+    if (FpsValueText)
+    {
+        FpsValueText->SetText(
+            kFpsChoices[FpsChoiceIndex] <= 0.0f
+                ? FText::FromString(TEXT("무제한"))
+                : FText::FromString(FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(kFpsChoices[FpsChoiceIndex])))
+        );
+    }
+    if (QualityValueText)
+    {
+        QualityValueText->SetText(UGuitarGameSettingsSubsystem::GetGraphicsPresetName(DraftSettings.GraphicsPreset));
+    }
     if (VSyncCheckBox) VSyncCheckBox->SetIsChecked(DraftSettings.bVSync);
     if (LumenCheckBox) LumenCheckBox->SetIsChecked(DraftSettings.bLumenEnabled);
 
-    if (MasterVolSlider) MasterVolSlider->SetValue(DraftSettings.MasterVolume);
-    if (MasterVolValueText) MasterVolValueText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(DraftSettings.MasterVolume * 100.0f))));
-    if (GuitarVolSlider) GuitarVolSlider->SetValue(DraftSettings.GuitarVolume);
-    if (GuitarVolValueText) GuitarVolValueText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(DraftSettings.GuitarVolume * 100.0f))));
-    if (AmbientVolSlider) AmbientVolSlider->SetValue(DraftSettings.AmbientVolume);
-    if (AmbientVolValueText) AmbientVolValueText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(DraftSettings.AmbientVolume * 100.0f))));
-    if (ReverbSlider) ReverbSlider->SetValue(DraftSettings.ReverbMix);
-    if (ReverbValueText) ReverbValueText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(DraftSettings.ReverbMix * 100.0f))));
+    if (CharacterValueText)
+    {
+        CharacterValueText->SetText(FText::FromString(
+            DraftSettings.CharacterModelIndex == 1 ? TEXT("Manny (남성형 마네킹)") : TEXT("Quinn (여성형 마네킹)")));
+    }
+    if (ChordBankValueText)
+    {
+        ChordBankValueText->SetText(FText::FromString(
+            UGuitarSongLibrarySubsystem::GetChordBankName(DraftSettings.ChordBankIndex)));
+    }
+
+    auto SyncSlider = [](USlider* Slider, UTextBlock* Label, float Val, const FString& Formatted)
+    {
+        if (Slider) Slider->SetValue(Val);
+        if (Label) Label->SetText(FText::FromString(Formatted));
+    };
+
+    SyncSlider(MasterVolSlider, MasterVolValueText, DraftSettings.MasterVolume, FString::Printf(TEXT("%d%%"), FMath::RoundToInt(DraftSettings.MasterVolume * 100.0f)));
+    SyncSlider(GuitarVolSlider, GuitarVolValueText, DraftSettings.GuitarVolume, FString::Printf(TEXT("%d%%"), FMath::RoundToInt(DraftSettings.GuitarVolume * 100.0f)));
+    SyncSlider(AmbientVolSlider, AmbientVolValueText, DraftSettings.AmbientVolume, FString::Printf(TEXT("%d%%"), FMath::RoundToInt(DraftSettings.AmbientVolume * 100.0f)));
+    SyncSlider(ReverbSlider, ReverbValueText, DraftSettings.ReverbMix, FString::Printf(TEXT("%d%%"), FMath::RoundToInt(DraftSettings.ReverbMix * 100.0f)));
 
     if (CurrentMoodLabel)
     {
-        CurrentMoodLabel->SetText(FText::Format(
-            NSLOCTEXT("GuitarMenu", "MoodCur", "시간대 · 분위기 프리셋: {0}"),
-            UGuitarGameSettingsSubsystem::GetMoodDisplayName(DraftSettings.AtmosphereMood)
+        CurrentMoodLabel->SetText(FText::FromString(
+            FString::Printf(TEXT("현재 분위기: %s"), *UGuitarGameSettingsSubsystem::GetMoodDisplayName(DraftSettings.AtmosphereMood).ToString())
         ));
     }
     if (ShowChordsCheckBox) ShowChordsCheckBox->SetIsChecked(DraftSettings.bShowChordDiagrams);
     if (AutoHideHudCheckBox) AutoHideHudCheckBox->SetIsChecked(DraftSettings.bAutoHideHudWhenSeated);
 
-    if (MouseSensSlider) MouseSensSlider->SetValue(DraftSettings.MouseSensitivity);
-    if (MouseSensValueText) MouseSensValueText->SetText(FText::FromString(FString::Printf(TEXT("%.2fx"), DraftSettings.MouseSensitivity)));
-    if (FovSlider) FovSlider->SetValue(DraftSettings.FieldOfView);
-    if (FovValueText) FovValueText->SetText(FText::FromString(FString::Printf(TEXT("%.0f°"), DraftSettings.FieldOfView)));
+    SyncSlider(CamDistSlider, CamDistValueText, DraftSettings.CameraDistance, FString::Printf(TEXT("%d cm"), FMath::RoundToInt(DraftSettings.CameraDistance)));
+    SyncSlider(MouseSensSlider, MouseSensValueText, DraftSettings.MouseSensitivity, FString::Printf(TEXT("%.2fx"), DraftSettings.MouseSensitivity));
+    SyncSlider(FovSlider, FovValueText, DraftSettings.FieldOfView, FString::Printf(TEXT("%d°"), FMath::RoundToInt(DraftSettings.FieldOfView)));
     if (InvertYCheckBox) InvertYCheckBox->SetIsChecked(DraftSettings.bInvertY);
 
+    SyncSongAndPlayLabels();
     bSyncingUI = false;
 }
 
-void URealGuitarMenuWidget::RefreshSongDisplay()
+void URealGuitarMenuWidget::SyncSongAndPlayLabels()
 {
-    const UWorld* World = GetWorld();
-    const UGuitarScoreSubsystem* ScoreSub = World ? World->GetSubsystem<UGuitarScoreSubsystem>() : nullptr;
-    if (ScoreSub)
-    {
-        const FGuitarPerformanceData& Data = ScoreSub->GetLoadedPerformance();
-        if (SongNameValueText)
-        {
-            SongNameValueText->SetText(Data.Title.IsEmpty()
-                ? NSLOCTEXT("GuitarMenu", "NoSong", "악보 없음")
-                : FText::FromString(Data.Title));
-        }
-        if (LoopSongCheckBox)
-        {
-            bSyncingUI = true;
-            LoopSongCheckBox->SetIsChecked(ScoreSub->IsLooping());
-            bSyncingUI = false;
-        }
-    }
-}
-
-void URealGuitarMenuWidget::PushDraftSettings(bool bPersist)
-{
-    if (bSyncingUI)
+    UWorld* World = GetWorld();
+    if (!World)
     {
         return;
     }
-    if (UGameInstance* GI = GetGameInstance())
+
+    if (UGuitarScoreSubsystem* Score = World->GetSubsystem<UGuitarScoreSubsystem>())
     {
-        if (UGuitarGameSettingsSubsystem* SettingsSub = GI->GetSubsystem<UGuitarGameSettingsSubsystem>())
+        const bool bLiveMode = (Score->GetControlMode() == EPlayControlMode::FreePlay);
+        if (PlayModeValueText)
         {
-            SettingsSub->UpdateAndApplySettings(DraftSettings, bPersist);
+            PlayModeValueText->SetText(FText::FromString(
+                bLiveMode ? TEXT("직접 연주 (Free Play)") : TEXT("자동 곡 감상 (Auto Song)")));
+        }
+        if (PlayPauseLabelText)
+        {
+            PlayPauseLabelText->SetText(FText::FromString(Score->IsPlaying() ? TEXT("일시 정지") : TEXT("곡 재생")));
+        }
+        if (LoopCheckBox)
+        {
+            LoopCheckBox->SetIsChecked(Score->IsLooping());
+        }
+        if (SelectedSongText)
+        {
+            SelectedSongText->SetText(FText::FromString(Score->GetLoadedPerformance().Title));
         }
     }
 }
 
-void URealGuitarMenuWidget::HandleResumeOrStartClicked() { CloseMenu(); }
+void URealGuitarMenuWidget::PushDraftSettings(bool bPersistToDisk)
+{
+    if (UGuitarGameSettingsSubsystem* SettingsSub = GetSettingsSubsystem())
+    {
+        SettingsSub->UpdateAndApplySettings(DraftSettings, bPersistToDisk);
+    }
+}
+
+UGuitarGameSettingsSubsystem* URealGuitarMenuWidget::GetSettingsSubsystem() const
+{
+    if (const UGameInstance* GI = GetGameInstance())
+    {
+        return GI->GetSubsystem<UGuitarGameSettingsSubsystem>();
+    }
+    return nullptr;
+}
+
+int32 URealGuitarMenuWidget::FindClosestResolutionIndex(const FIntPoint& Res) const
+{
+    int32 BestIdx = 0;
+    int32 BestDist = MAX_int32;
+    for (int32 i = 0; i < ResolutionChoices.Num(); ++i)
+    {
+        const int32 Dist = FMath::Abs(ResolutionChoices[i].X - Res.X) + FMath::Abs(ResolutionChoices[i].Y - Res.Y);
+        if (Dist < BestDist)
+        {
+            BestDist = Dist;
+            BestIdx = i;
+        }
+    }
+    return BestIdx;
+}
+
+void URealGuitarMenuWidget::HandleResumeOrStartClicked()
+{
+    CloseMenu();
+}
 
 void URealGuitarMenuWidget::HandleBackToTitleClicked()
 {
@@ -577,13 +773,67 @@ void URealGuitarMenuWidget::HandleBackToTitleClicked()
 
 void URealGuitarMenuWidget::HandleQuitClicked()
 {
-    UKismetSystemLibrary::QuitGame(GetWorld(), GetOwningPlayer(), EQuitPreference::Quit, false);
+    UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }
 
 void URealGuitarMenuWidget::HandleTabMainClicked() { SelectTab(0); }
 void URealGuitarMenuWidget::HandleTabGraphicsClicked() { SelectTab(1); }
 void URealGuitarMenuWidget::HandleTabAudioClicked() { SelectTab(2); }
 void URealGuitarMenuWidget::HandleTabControlsClicked() { SelectTab(3); }
+
+void URealGuitarMenuWidget::HandleTogglePlayModeClicked()
+{
+    if (UWorld* World = GetWorld())
+    {
+        if (UGuitarScoreSubsystem* Score = World->GetSubsystem<UGuitarScoreSubsystem>())
+        {
+            Score->ToggleControlMode();
+            SyncSongAndPlayLabels();
+        }
+    }
+}
+
+void URealGuitarMenuWidget::HandleChordBankPrevClicked()
+{
+    const int32 NumBanks = FMath::Max(1, UGuitarSongLibrarySubsystem::GetNumChordBanks());
+    DraftSettings.ChordBankIndex = (DraftSettings.ChordBankIndex - 1 + NumBanks) % NumBanks;
+    if (UWorld* World = GetWorld())
+    {
+        if (UGuitarScoreSubsystem* Score = World->GetSubsystem<UGuitarScoreSubsystem>())
+        {
+            Score->SetChordBankIndex(DraftSettings.ChordBankIndex);
+        }
+    }
+    SyncWidgetsFromSettings();
+    PushDraftSettings(true);
+}
+
+void URealGuitarMenuWidget::HandleChordBankNextClicked()
+{
+    const int32 NumBanks = FMath::Max(1, UGuitarSongLibrarySubsystem::GetNumChordBanks());
+    DraftSettings.ChordBankIndex = (DraftSettings.ChordBankIndex + 1) % NumBanks;
+    if (UWorld* World = GetWorld())
+    {
+        if (UGuitarScoreSubsystem* Score = World->GetSubsystem<UGuitarScoreSubsystem>())
+        {
+            Score->SetChordBankIndex(DraftSettings.ChordBankIndex);
+        }
+    }
+    SyncWidgetsFromSettings();
+    PushDraftSettings(true);
+}
+
+void URealGuitarMenuWidget::HandleCharacterPrevClicked()
+{
+    DraftSettings.CharacterModelIndex = (DraftSettings.CharacterModelIndex == 0) ? 1 : 0;
+    SyncWidgetsFromSettings();
+    PushDraftSettings(true);
+}
+
+void URealGuitarMenuWidget::HandleCharacterNextClicked()
+{
+    HandleCharacterPrevClicked();
+}
 
 void URealGuitarMenuWidget::HandleSongPrevClicked()
 {
@@ -592,7 +842,7 @@ void URealGuitarMenuWidget::HandleSongPrevClicked()
         if (UGuitarSongLibrarySubsystem* Lib = GI->GetSubsystem<UGuitarSongLibrarySubsystem>())
         {
             Lib->PlayPreviousSong();
-            RefreshSongDisplay();
+            SyncSongAndPlayLabels();
         }
     }
 }
@@ -604,7 +854,7 @@ void URealGuitarMenuWidget::HandleSongNextClicked()
         if (UGuitarSongLibrarySubsystem* Lib = GI->GetSubsystem<UGuitarSongLibrarySubsystem>())
         {
             Lib->PlayNextSong();
-            RefreshSongDisplay();
+            SyncSongAndPlayLabels();
         }
     }
 }
@@ -613,10 +863,18 @@ void URealGuitarMenuWidget::HandlePlayPauseClicked()
 {
     if (UWorld* World = GetWorld())
     {
-        if (UGuitarScoreSubsystem* ScoreSub = World->GetSubsystem<UGuitarScoreSubsystem>())
+        if (UGuitarScoreSubsystem* Score = World->GetSubsystem<UGuitarScoreSubsystem>())
         {
-            if (ScoreSub->IsPlaying()) ScoreSub->Pause();
-            else ScoreSub->Play();
+            if (Score->IsPlaying())
+            {
+                Score->Pause();
+            }
+            else
+            {
+                Score->SetControlMode(EPlayControlMode::AutoSong);
+                Score->Play();
+            }
+            SyncSongAndPlayLabels();
         }
     }
 }
@@ -626,9 +884,9 @@ void URealGuitarMenuWidget::HandleLoopToggled(bool bChecked)
     if (bSyncingUI) return;
     if (UWorld* World = GetWorld())
     {
-        if (UGuitarScoreSubsystem* ScoreSub = World->GetSubsystem<UGuitarScoreSubsystem>())
+        if (UGuitarScoreSubsystem* Score = World->GetSubsystem<UGuitarScoreSubsystem>())
         {
-            ScoreSub->SetLooping(bChecked);
+            Score->SetLooping(bChecked);
         }
     }
 }
@@ -639,8 +897,8 @@ void URealGuitarMenuWidget::HandleJamBalladClicked()
     {
         if (UGuitarSongLibrarySubsystem* Lib = GI->GetSubsystem<UGuitarSongLibrarySubsystem>())
         {
-            Lib->GenerateAndPlayCustomChart({ TEXT("C"), TEXT("G"), TEXT("Am"), TEXT("F") }, 76.0f, false, TEXT("folk_ballad"), true);
-            RefreshSongDisplay();
+            Lib->GenerateAndPlayCustomChart({ TEXT("C"), TEXT("G"), TEXT("Am"), TEXT("F") }, 88.0f, false, TEXT("어쿠스틱 발라드 잼"), true);
+            SyncSongAndPlayLabels();
         }
     }
 }
@@ -651,8 +909,8 @@ void URealGuitarMenuWidget::HandleJamFingerstyleClicked()
     {
         if (UGuitarSongLibrarySubsystem* Lib = GI->GetSubsystem<UGuitarSongLibrarySubsystem>())
         {
-            Lib->GenerateAndPlayCustomChart({ TEXT("D"), TEXT("A"), TEXT("Bm"), TEXT("G") }, 84.0f, true, TEXT("travis_roll"), true);
-            RefreshSongDisplay();
+            Lib->GenerateAndPlayCustomChart({ TEXT("Em"), TEXT("C"), TEXT("G"), TEXT("D") }, 82.0f, true, TEXT("포크 핑거스타일 잼"), true);
+            SyncSongAndPlayLabels();
         }
     }
 }
@@ -663,8 +921,8 @@ void URealGuitarMenuWidget::HandleJamPopGrooveClicked()
     {
         if (UGuitarSongLibrarySubsystem* Lib = GI->GetSubsystem<UGuitarSongLibrarySubsystem>())
         {
-            Lib->GenerateAndPlayCustomChart({ TEXT("Em"), TEXT("C"), TEXT("G"), TEXT("D") }, 98.0f, false, TEXT("pop_sixteenth"), true);
-            RefreshSongDisplay();
+            Lib->GenerateAndPlayCustomChart({ TEXT("Fmaj7"), TEXT("G"), TEXT("Em7"), TEXT("Am7") }, 92.0f, false, TEXT("선셋 칠 로파이 잼"), true);
+            SyncSongAndPlayLabels();
         }
     }
 }
@@ -674,7 +932,7 @@ void URealGuitarMenuWidget::HandleResPrevClicked()
     if (ResolutionChoices.Num() == 0) return;
     ResolutionIndex = (ResolutionIndex - 1 + ResolutionChoices.Num()) % ResolutionChoices.Num();
     DraftSettings.Resolution = ResolutionChoices[ResolutionIndex];
-    if (ResValueText) ResValueText->SetText(FText::FromString(FString::Printf(TEXT("%d x %d"), DraftSettings.Resolution.X, DraftSettings.Resolution.Y)));
+    SyncWidgetsFromSettings();
 }
 
 void URealGuitarMenuWidget::HandleResNextClicked()
@@ -682,57 +940,55 @@ void URealGuitarMenuWidget::HandleResNextClicked()
     if (ResolutionChoices.Num() == 0) return;
     ResolutionIndex = (ResolutionIndex + 1) % ResolutionChoices.Num();
     DraftSettings.Resolution = ResolutionChoices[ResolutionIndex];
-    if (ResValueText) ResValueText->SetText(FText::FromString(FString::Printf(TEXT("%d x %d"), DraftSettings.Resolution.X, DraftSettings.Resolution.Y)));
+    SyncWidgetsFromSettings();
 }
 
 void URealGuitarMenuWidget::HandleWinModePrevClicked()
 {
     DraftSettings.WindowMode = (DraftSettings.WindowMode + 2) % 3;
-    if (WinModeValueText) WinModeValueText->SetText(FormatWindowModeText(DraftSettings.WindowMode));
+    SyncWidgetsFromSettings();
 }
 
 void URealGuitarMenuWidget::HandleWinModeNextClicked()
 {
     DraftSettings.WindowMode = (DraftSettings.WindowMode + 1) % 3;
-    if (WinModeValueText) WinModeValueText->SetText(FormatWindowModeText(DraftSettings.WindowMode));
+    SyncWidgetsFromSettings();
 }
 
 void URealGuitarMenuWidget::HandleFpsPrevClicked()
 {
-    FpsChoiceIndex = (FpsChoiceIndex - 1 + GNumFpsChoices) % GNumFpsChoices;
-    DraftSettings.FrameRateLimit = GFpsChoices[FpsChoiceIndex];
-    if (FpsValueText) FpsValueText->SetText(FormatFpsText(DraftSettings.FrameRateLimit));
+    FpsChoiceIndex = (FpsChoiceIndex - 1 + kNumFpsChoices) % kNumFpsChoices;
+    DraftSettings.FrameRateLimit = kFpsChoices[FpsChoiceIndex];
+    SyncWidgetsFromSettings();
 }
 
 void URealGuitarMenuWidget::HandleFpsNextClicked()
 {
-    FpsChoiceIndex = (FpsChoiceIndex + 1) % GNumFpsChoices;
-    DraftSettings.FrameRateLimit = GFpsChoices[FpsChoiceIndex];
-    if (FpsValueText) FpsValueText->SetText(FormatFpsText(DraftSettings.FrameRateLimit));
+    FpsChoiceIndex = (FpsChoiceIndex + 1) % kNumFpsChoices;
+    DraftSettings.FrameRateLimit = kFpsChoices[FpsChoiceIndex];
+    SyncWidgetsFromSettings();
 }
 
 void URealGuitarMenuWidget::HandleQualityPrevClicked()
 {
     DraftSettings.GraphicsPreset = (DraftSettings.GraphicsPreset + 4) % 5;
-    if (QualityValueText) QualityValueText->SetText(UGuitarGameSettingsSubsystem::GetGraphicsPresetName(DraftSettings.GraphicsPreset));
+    SyncWidgetsFromSettings();
 }
 
 void URealGuitarMenuWidget::HandleQualityNextClicked()
 {
     DraftSettings.GraphicsPreset = (DraftSettings.GraphicsPreset + 1) % 5;
-    if (QualityValueText) QualityValueText->SetText(UGuitarGameSettingsSubsystem::GetGraphicsPresetName(DraftSettings.GraphicsPreset));
+    SyncWidgetsFromSettings();
 }
 
 void URealGuitarMenuWidget::HandleVSyncToggled(bool bChecked)
 {
-    if (bSyncingUI) return;
-    DraftSettings.bVSync = bChecked;
+    if (!bSyncingUI) DraftSettings.bVSync = bChecked;
 }
 
 void URealGuitarMenuWidget::HandleLumenToggled(bool bChecked)
 {
-    if (bSyncingUI) return;
-    DraftSettings.bLumenEnabled = bChecked;
+    if (!bSyncingUI) DraftSettings.bLumenEnabled = bChecked;
 }
 
 void URealGuitarMenuWidget::HandleApplyGraphicsClicked()
@@ -740,50 +996,52 @@ void URealGuitarMenuWidget::HandleApplyGraphicsClicked()
     PushDraftSettings(true);
     if (GraphicsStatusText)
     {
-        GraphicsStatusText->SetText(NSLOCTEXT("GuitarMenu", "AppliedOk", "그래픽 설정이 적용 및 저장되었습니다."));
+        GraphicsStatusText->SetText(FText::FromString(TEXT("그래픽 및 해상도 설정이 저장되어 적용되었습니다.")));
     }
 }
 
 void URealGuitarMenuWidget::HandleResetDefaultsClicked()
 {
-    if (UGameInstance* GI = GetGameInstance())
+    if (UGuitarGameSettingsSubsystem* SettingsSub = GetSettingsSubsystem())
     {
-        if (UGuitarGameSettingsSubsystem* SettingsSub = GI->GetSubsystem<UGuitarGameSettingsSubsystem>())
+        SettingsSub->ResetToDefaults();
+        DraftSettings = SettingsSub->GetSettings();
+        SyncWidgetsFromSettings();
+        if (GraphicsStatusText)
         {
-            SettingsSub->ResetToDefaults();
-            SyncWidgetsFromSettings();
-            if (GraphicsStatusText)
-            {
-                GraphicsStatusText->SetText(NSLOCTEXT("GuitarMenu", "ResetOk", "기본 설정으로 복원되었습니다."));
-            }
+            GraphicsStatusText->SetText(FText::FromString(TEXT("모든 설정을 기본값으로 복원했습니다.")));
         }
     }
 }
 
 void URealGuitarMenuWidget::HandleMasterVolChanged(float Value)
 {
-    DraftSettings.MasterVolume = Value;
+    if (bSyncingUI) return;
+    DraftSettings.MasterVolume = FMath::Clamp(Value, 0.0f, 1.0f);
     if (MasterVolValueText) MasterVolValueText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.0f))));
     PushDraftSettings(true);
 }
 
 void URealGuitarMenuWidget::HandleGuitarVolChanged(float Value)
 {
-    DraftSettings.GuitarVolume = Value;
+    if (bSyncingUI) return;
+    DraftSettings.GuitarVolume = FMath::Clamp(Value, 0.0f, 1.0f);
     if (GuitarVolValueText) GuitarVolValueText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.0f))));
     PushDraftSettings(true);
 }
 
 void URealGuitarMenuWidget::HandleAmbientVolChanged(float Value)
 {
-    DraftSettings.AmbientVolume = Value;
+    if (bSyncingUI) return;
+    DraftSettings.AmbientVolume = FMath::Clamp(Value, 0.0f, 1.0f);
     if (AmbientVolValueText) AmbientVolValueText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.0f))));
     PushDraftSettings(true);
 }
 
 void URealGuitarMenuWidget::HandleReverbChanged(float Value)
 {
-    DraftSettings.ReverbMix = Value;
+    if (bSyncingUI) return;
+    DraftSettings.ReverbMix = FMath::Clamp(Value, 0.0f, 1.0f);
     if (ReverbValueText) ReverbValueText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.0f))));
     PushDraftSettings(true);
 }
@@ -830,17 +1088,27 @@ void URealGuitarMenuWidget::HandleAutoHideHudToggled(bool bChecked)
     PushDraftSettings(true);
 }
 
+void URealGuitarMenuWidget::HandleCamDistChanged(float Value)
+{
+    if (bSyncingUI) return;
+    DraftSettings.CameraDistance = FMath::Clamp(Value, 140.0f, 460.0f);
+    if (CamDistValueText) CamDistValueText->SetText(FText::FromString(FString::Printf(TEXT("%d cm"), FMath::RoundToInt(DraftSettings.CameraDistance))));
+    PushDraftSettings(true);
+}
+
 void URealGuitarMenuWidget::HandleMouseSensChanged(float Value)
 {
-    DraftSettings.MouseSensitivity = Value;
-    if (MouseSensValueText) MouseSensValueText->SetText(FText::FromString(FString::Printf(TEXT("%.2fx"), Value)));
+    if (bSyncingUI) return;
+    DraftSettings.MouseSensitivity = FMath::Clamp(Value, 0.2f, 3.0f);
+    if (MouseSensValueText) MouseSensValueText->SetText(FText::FromString(FString::Printf(TEXT("%.2fx"), DraftSettings.MouseSensitivity)));
     PushDraftSettings(true);
 }
 
 void URealGuitarMenuWidget::HandleFovChanged(float Value)
 {
-    DraftSettings.FieldOfView = Value;
-    if (FovValueText) FovValueText->SetText(FText::FromString(FString::Printf(TEXT("%.0f°"), Value)));
+    if (bSyncingUI) return;
+    DraftSettings.FieldOfView = FMath::Clamp(Value, 65.0f, 110.0f);
+    if (FovValueText) FovValueText->SetText(FText::FromString(FString::Printf(TEXT("%d°"), FMath::RoundToInt(DraftSettings.FieldOfView))));
     PushDraftSettings(true);
 }
 

@@ -42,6 +42,9 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Atmosphere|Lighting")
     TObjectPtr<UPointLightComponent> WarmBenchLamp;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Atmosphere|Lighting")
+    TObjectPtr<UPointLightComponent> CampfireLight;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Atmosphere|Audio")
     TObjectPtr<UAudioComponent> AmbientAudioComponent;
 
@@ -70,6 +73,7 @@ private:
         FLinearColor FogColor = FLinearColor(0.75f, 0.58f, 0.45f);
         float LampIntensity = 1800.0f;
         FLinearColor LampColor = FLinearColor(1.0f, 0.68f, 0.35f);
+        float CampfireIntensity = 2200.0f;
         float AmbientMoodGain = 0.7f;
     };
 
@@ -84,4 +88,5 @@ private:
     FMoodLightingTarget TargetState;
     FMoodLightingTarget CurrentState;
     bool bInterpolating = false;
+    float FlickerTime = 0.0f;
 };

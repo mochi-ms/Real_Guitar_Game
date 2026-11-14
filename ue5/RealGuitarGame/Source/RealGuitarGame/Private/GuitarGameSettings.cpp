@@ -215,6 +215,9 @@ void UGuitarGameSettingsSubsystem::ClampSettings(FGuitarSettingsData& InOutSetti
     InOutSettings.ReverbMix = FMath::Clamp(InOutSettings.ReverbMix, 0.0f, 1.0f);
     InOutSettings.MouseSensitivity = FMath::Clamp(InOutSettings.MouseSensitivity, 0.2f, 3.0f);
     InOutSettings.FieldOfView = FMath::Clamp(InOutSettings.FieldOfView, 55.0f, 110.0f);
+    InOutSettings.CharacterModelIndex = FMath::Clamp(InOutSettings.CharacterModelIndex, 0, 1);
+    InOutSettings.CameraDistance = FMath::Clamp(InOutSettings.CameraDistance, 140.0f, 460.0f);
+    InOutSettings.ChordBankIndex = FMath::Clamp(InOutSettings.ChordBankIndex, 0, 2);
 }
 
 void UGuitarGameSettingsSubsystem::ApplyEngineAndAudioSettings(bool bSaveEngineConfig)
@@ -291,6 +294,9 @@ bool UGuitarGameSettingsSubsystem::LoadFromDisk()
     if (Root->TryGetNumberField(TEXT("fov"), NumVal)) CurrentSettings.FieldOfView = static_cast<float>(NumVal);
     if (Root->TryGetBoolField(TEXT("auto_hide_hud_when_seated"), BoolVal)) CurrentSettings.bAutoHideHudWhenSeated = BoolVal;
     if (Root->TryGetBoolField(TEXT("show_chord_diagrams"), BoolVal)) CurrentSettings.bShowChordDiagrams = BoolVal;
+    if (Root->TryGetNumberField(TEXT("character_model_index"), IntVal)) CurrentSettings.CharacterModelIndex = IntVal;
+    if (Root->TryGetNumberField(TEXT("camera_distance"), NumVal)) CurrentSettings.CameraDistance = static_cast<float>(NumVal);
+    if (Root->TryGetNumberField(TEXT("chord_bank_index"), IntVal)) CurrentSettings.ChordBankIndex = IntVal;
     if (Root->TryGetStringField(TEXT("atmosphere_mood"), StrVal)) CurrentSettings.AtmosphereMood = ParseMoodString(StrVal);
 
     return true;
@@ -317,6 +323,9 @@ bool UGuitarGameSettingsSubsystem::SaveToDisk() const
     Root->SetNumberField(TEXT("fov"), CurrentSettings.FieldOfView);
     Root->SetBoolField(TEXT("auto_hide_hud_when_seated"), CurrentSettings.bAutoHideHudWhenSeated);
     Root->SetBoolField(TEXT("show_chord_diagrams"), CurrentSettings.bShowChordDiagrams);
+    Root->SetNumberField(TEXT("character_model_index"), CurrentSettings.CharacterModelIndex);
+    Root->SetNumberField(TEXT("camera_distance"), CurrentSettings.CameraDistance);
+    Root->SetNumberField(TEXT("chord_bank_index"), CurrentSettings.ChordBankIndex);
     Root->SetStringField(TEXT("atmosphere_mood"), MoodToString(CurrentSettings.AtmosphereMood));
 
     FString OutJson;

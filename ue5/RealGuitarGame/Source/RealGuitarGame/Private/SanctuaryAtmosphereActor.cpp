@@ -35,11 +35,19 @@ ASanctuaryAtmosphereActor::ASanctuaryAtmosphereActor()
 
     WarmBenchLamp = CreateDefaultSubobject<UPointLightComponent>(TEXT("WarmBenchLamp"));
     WarmBenchLamp->SetupAttachment(Root);
-    WarmBenchLamp->SetRelativeLocation(FVector(165.0f, 110.0f, 210.0f));
-    WarmBenchLamp->SetAttenuationRadius(650.0f);
-    WarmBenchLamp->SetSourceRadius(12.0f);
-    WarmBenchLamp->SetIntensity(1800.0f);
-    WarmBenchLamp->SetLightColor(FLinearColor(1.0f, 0.68f, 0.36f));
+    WarmBenchLamp->SetRelativeLocation(FVector(0.0f, 0.0f, 250.0f));
+    WarmBenchLamp->SetAttenuationRadius(780.0f);
+    WarmBenchLamp->SetSourceRadius(16.0f);
+    WarmBenchLamp->SetIntensity(2200.0f);
+    WarmBenchLamp->SetLightColor(FLinearColor(1.0f, 0.72f, 0.40f));
+
+    CampfireLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("CampfireLight"));
+    CampfireLight->SetupAttachment(Root);
+    CampfireLight->SetRelativeLocation(FVector(-220.0f, -290.0f, 68.0f));
+    CampfireLight->SetAttenuationRadius(920.0f);
+    CampfireLight->SetSourceRadius(18.0f);
+    CampfireLight->SetIntensity(2200.0f);
+    CampfireLight->SetLightColor(FLinearColor(1.0f, 0.46f, 0.14f));
 
     AmbientAudioComponent = CreateDefaultSubobject<UAudioComponent>(TEXT("AmbientAudio"));
     AmbientAudioComponent->SetupAttachment(Root);
@@ -62,6 +70,7 @@ ASanctuaryAtmosphereActor::FMoodLightingTarget ASanctuaryAtmosphereActor::GetPre
         T.FogColor = FLinearColor(0.14f, 0.18f, 0.32f);
         T.LampIntensity = 5200.0f;
         T.LampColor = FLinearColor(1.0f, 0.62f, 0.28f);
+        T.CampfireIntensity = 4200.0f;
         T.AmbientMoodGain = 0.85f;
         break;
 
@@ -75,6 +84,7 @@ ASanctuaryAtmosphereActor::FMoodLightingTarget ASanctuaryAtmosphereActor::GetPre
         T.FogColor = FLinearColor(0.72f, 0.82f, 0.90f);
         T.LampIntensity = 300.0f;
         T.LampColor = FLinearColor(1.0f, 0.78f, 0.52f);
+        T.CampfireIntensity = 900.0f;
         T.AmbientMoodGain = 0.65f;
         break;
 
@@ -88,6 +98,7 @@ ASanctuaryAtmosphereActor::FMoodLightingTarget ASanctuaryAtmosphereActor::GetPre
         T.FogColor = FLinearColor(0.32f, 0.40f, 0.50f);
         T.LampIntensity = 3600.0f;
         T.LampColor = FLinearColor(1.0f, 0.70f, 0.38f);
+        T.CampfireIntensity = 2600.0f;
         T.AmbientMoodGain = 1.0f;
         break;
 
@@ -102,6 +113,7 @@ ASanctuaryAtmosphereActor::FMoodLightingTarget ASanctuaryAtmosphereActor::GetPre
         T.FogColor = FLinearColor(0.84f, 0.58f, 0.42f);
         T.LampIntensity = 1900.0f;
         T.LampColor = FLinearColor(1.0f, 0.68f, 0.35f);
+        T.CampfireIntensity = 2100.0f;
         T.AmbientMoodGain = 0.70f;
         break;
     }
@@ -179,6 +191,13 @@ void ASanctuaryAtmosphereActor::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
+    FlickerTime += DeltaTime;
+    const float EmberMod = 1.0f + 0.14f * FMath::Sin(FlickerTime * 8.4f) + 0.08f * FMath::Sin(FlickerTime * 16.9f + 1.1f);
+    if (CampfireLight)
+    {
+        CampfireLight->SetIntensity(CurrentState.CampfireIntensity * EmberMod);
+    }
+
     if (!bInterpolating)
     {
         return;
@@ -194,6 +213,7 @@ void ASanctuaryAtmosphereActor::Tick(float DeltaTime)
     CurrentState.FogColor = FMath::CInterpTo(CurrentState.FogColor, TargetState.FogColor, DeltaTime, Speed);
     CurrentState.LampIntensity = FMath::FInterpTo(CurrentState.LampIntensity, TargetState.LampIntensity, DeltaTime, Speed);
     CurrentState.LampColor = FMath::CInterpTo(CurrentState.LampColor, TargetState.LampColor, DeltaTime, Speed);
+    CurrentState.CampfireIntensity = FMath::FInterpTo(CurrentState.CampfireIntensity, TargetState.CampfireIntensity, DeltaTime, Speed);
     CurrentState.AmbientMoodGain = FMath::FInterpTo(CurrentState.AmbientMoodGain, TargetState.AmbientMoodGain, DeltaTime, Speed);
 
     ApplyTargetsImmediate();
@@ -209,6 +229,7 @@ void ASanctuaryAtmosphereActor::Tick(float DeltaTime)
     const bool bDone =
         FMath::IsNearlyEqual(CurrentState.SunIntensity, TargetState.SunIntensity, 0.02f) &&
         FMath::IsNearlyEqual(CurrentState.LampIntensity, TargetState.LampIntensity, 2.0f) &&
+        FMath::IsNearlyEqual(CurrentState.CampfireIntensity, TargetState.CampfireIntensity, 2.0f) &&
         FMath::IsNearlyEqual(CurrentState.FogDensity, TargetState.FogDensity, 0.0005f);
     if (bDone)
     {
@@ -240,5 +261,9 @@ void ASanctuaryAtmosphereActor::ApplyTargetsImmediate()
     {
         WarmBenchLamp->SetIntensity(CurrentState.LampIntensity);
         WarmBenchLamp->SetLightColor(CurrentState.LampColor);
+    }
+    if (CampfireLight)
+    {
+        CampfireLight->SetIntensity(CurrentState.CampfireIntensity);
     }
 }

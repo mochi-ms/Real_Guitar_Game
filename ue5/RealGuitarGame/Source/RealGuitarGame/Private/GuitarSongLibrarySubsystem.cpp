@@ -398,3 +398,31 @@ void UGuitarSongLibrarySubsystem::GenerateAndPlayCustomChart(
         }
     }
 }
+
+int32 UGuitarSongLibrarySubsystem::GetNumChordBanks()
+{
+    return 3;
+}
+
+FString UGuitarSongLibrarySubsystem::GetChordBankName(int32 BankIndex)
+{
+    switch (FMath::Clamp(BankIndex, 0, 2))
+    {
+    case 1:  return TEXT("Campfire Folk");
+    case 2:  return TEXT("Midnight Lo-Fi");
+    default: return TEXT("Sunset Acoustic");
+    }
+}
+
+TArray<FString> UGuitarSongLibrarySubsystem::GetChordBankSymbols(int32 BankIndex)
+{
+    switch (FMath::Clamp(BankIndex, 0, 2))
+    {
+    case 1:
+        return { TEXT("G"), TEXT("D"), TEXT("Em7"), TEXT("Cadd9"), TEXT("Am7"), TEXT("C"), TEXT("Bm7"), TEXT("A") };
+    case 2:
+        return { TEXT("Cmaj7"), TEXT("Am7"), TEXT("Dm7"), TEXT("G"), TEXT("Fmaj7"), TEXT("Em"), TEXT("A"), TEXT("Bm7") };
+    default:
+        return { TEXT("C"), TEXT("G"), TEXT("Am"), TEXT("Fmaj7"), TEXT("Dm7"), TEXT("Em7"), TEXT("Cadd9"), TEXT("G/B") };
+    }
+}

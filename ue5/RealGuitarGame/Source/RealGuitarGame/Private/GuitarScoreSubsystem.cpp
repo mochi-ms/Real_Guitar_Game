@@ -1,4 +1,5 @@
 #include "GuitarScoreSubsystem.h"
+#include "GuitarSongLibrarySubsystem.h"
 
 #include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
@@ -13,6 +14,9 @@ TStatId UGuitarScoreSubsystem::GetStatId() const
 void UGuitarScoreSubsystem::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+
+    EnsureLiveBankInitialized();
+    ProcessLiveEventsTick(DeltaTime);
 
     if (!bHasScore || !bIsPlaying)
     {
@@ -188,6 +192,7 @@ void UGuitarScoreSubsystem::Play()
     if (bHasScore)
     {
         bIsPlaying = true;
+        SetControlMode(EPlayControlMode::AutoSong);
     }
 }
 
@@ -218,21 +223,38 @@ void UGuitarScoreSubsystem::SeekTo(float TimeSec)
 void UGuitarScoreSubsystem::GetActiveEvents(TArray<FGuitarEvent>& OutActiveEvents) const
 {
     OutActiveEvents.Reset();
-    for (const FGuitarEvent& Ev : LoadedPerformance.Events)
+    if (bIsPlaying)
     {
-        if (Ev.TimeSec <= CurrentTimeSec && (Ev.TimeSec + Ev.DurationSec) >= CurrentTimeSec)
+        for (const FGuitarEvent& Ev : LoadedPerformance.Events)
         {
-            OutActiveEvents.Add(Ev);
+            if (Ev.TimeSec <= CurrentTimeSec && (Ev.TimeSec + Ev.DurationSec) >= CurrentTimeSec)
+            {
+                OutActiveEvents.Add(Ev);
+            }
+            else if (Ev.TimeSec > CurrentTimeSec)
+            {
+                break;
+            }
         }
-        else if (Ev.TimeSec > CurrentTimeSec)
+    }
+
+    for (const FGuitarEvent& LiveEv : RingingLiveEvents)
+    {
+        if ((LiveEv.TimeSec + LiveEv.DurationSec) >= LiveClockSec)
         {
-            break;
+            OutActiveEvents.Add(LiveEv);
         }
     }
 }
 
 bool UGuitarScoreSubsystem::GetCurrentChord(FGuitarChordSnapshot& OutChord) const
 {
+    if ((ControlMode == EPlayControlMode::FreePlay || !bIsPlaying) && !CurrentLiveChord.Symbol.IsEmpty())
+    {
+        OutChord = CurrentLiveChord;
+        return true;
+    }
+
     if (LoadedPerformance.Chords.IsValidIndex(CurrentChordIndex))
     {
         OutChord = LoadedPerformance.Chords[CurrentChordIndex];
@@ -277,4 +299,258 @@ EGuitarArticulation UGuitarScoreSubsystem::ParseArticulation(const FString& Valu
     if (Value == TEXT("harmonic")) return EGuitarArticulation::Harmonic;
     if (Value == TEXT("vibrato")) return EGuitarArticulation::Vibrato;
     return EGuitarArticulation::Normal;
+}
+
+void UGuitarScoreSubsystem::EnsureLiveBankInitialized()
+{
+    if (LiveChordSlots.IsEmpty())
+    {
+        LiveChordSlots = UGuitarSongLibrarySubsystem::GetChordBankSymbols(ChordBankIndex);
+    }
+    if (CurrentLiveChord.Symbol.IsEmpty() && !LiveChordSlots.IsEmpty())
+    {
+        ActiveLiveChordSlot = FMath::Clamp(ActiveLiveChordSlot, 0, LiveChordSlots.Num() - 1);
+        SelectLiveChordSymbol(LiveChordSlots[ActiveLiveChordSlot]);
+    }
+}
+
+void UGuitarScoreSubsystem::SetControlMode(EPlayControlMode NewMode)
+{
+    EnsureLiveBankInitialized();
+    if (ControlMode != NewMode)
+    {
+        ControlMode = NewMode;
+        if (ControlMode == EPlayControlMode::FreePlay)
+        {
+            bIsPlaying = false;
+            OnChordChanged.Broadcast(CurrentLiveChord);
+        }
+        OnControlModeChanged.Broadcast(ControlMode);
+    }
+}
+
+void UGuitarScoreSubsystem::ToggleControlMode()
+{
+    if (ControlMode == EPlayControlMode::FreePlay)
+    {
+        if (bHasScore)
+        {
+            Play();
+        }
+    }
+    else
+    {
+        SetControlMode(EPlayControlMode::FreePlay);
+    }
+}
+
+void UGuitarScoreSubsystem::SetChordBankIndex(int32 BankIndex)
+{
+    ChordBankIndex = FMath::Clamp(BankIndex, 0, UGuitarSongLibrarySubsystem::GetNumChordBanks() - 1);
+    LiveChordSlots = UGuitarSongLibrarySubsystem::GetChordBankSymbols(ChordBankIndex);
+    SelectLiveChordSlot(0);
+}
+
+TArray<FString> UGuitarScoreSubsystem::GetLiveChordSlots()
+{
+    EnsureLiveBankInitialized();
+    return LiveChordSlots;
+}
+
+void UGuitarScoreSubsystem::SelectLiveChordSlot(int32 SlotIndex)
+{
+    EnsureLiveBankInitialized();
+    if (LiveChordSlots.IsValidIndex(SlotIndex))
+    {
+        ActiveLiveChordSlot = SlotIndex;
+        SelectLiveChordSymbol(LiveChordSlots[SlotIndex]);
+    }
+}
+
+void UGuitarScoreSubsystem::SelectLiveChordSymbol(const FString& Symbol)
+{
+    TArray<int32> Frets;
+    TArray<int32> Fingers;
+    UGuitarSongLibrarySubsystem::ResolveChordShape(Symbol, Frets, Fingers);
+
+    CurrentLiveChord.TimeSec = LiveClockSec;
+    CurrentLiveChord.DurationSec = 4.0f;
+    CurrentLiveChord.Symbol = Symbol;
+    CurrentLiveChord.Frets = MoveTemp(Frets);
+    CurrentLiveChord.Fingers = MoveTemp(Fingers);
+
+    OnChordChanged.Broadcast(CurrentLiveChord);
+}
+
+void UGuitarScoreSubsystem::TriggerLiveStrum(bool bDownStrum, float Velocity)
+{
+    EnsureLiveBankInitialized();
+    if (bIsPlaying || ControlMode != EPlayControlMode::FreePlay)
+    {
+        SetControlMode(EPlayControlMode::FreePlay);
+    }
+
+    const TArray<int32>& Frets = CurrentLiveChord.Frets;
+    const TArray<int32>& Fingers = CurrentLiveChord.Fingers;
+
+    TArray<int32> StringsToHit;
+    if (bDownStrum)
+    {
+        for (int32 S = 6; S >= 1; --S)
+        {
+            if (Frets.IsValidIndex(S - 1) && Frets[S - 1] >= 0)
+            {
+                StringsToHit.Add(S);
+            }
+        }
+    }
+    else
+    {
+        for (int32 S = 1; S <= 6 && StringsToHit.Num() < 4; ++S)
+        {
+            if (Frets.IsValidIndex(S - 1) && Frets[S - 1] >= 0)
+            {
+                StringsToHit.Add(S);
+            }
+        }
+    }
+
+    const float BaseVel = FMath::Clamp(Velocity, 0.2f, 1.0f);
+    const int32 GroupId = ++LiveEventCounter;
+
+    for (int32 Idx = 0; Idx < StringsToHit.Num(); ++Idx)
+    {
+        const int32 S = StringsToHit[Idx];
+        const int32 Fret = Frets[S - 1];
+        FGuitarEvent Ev;
+        Ev.Id = ++LiveEventCounter;
+        Ev.TimeSec = LiveClockSec + Idx * (bDownStrum ? 0.0042f : 0.0036f);
+        Ev.DurationSec = 1.9f;
+        Ev.Beat = 0.0f;
+        Ev.StringIndex = S;
+        Ev.Fret = Fret;
+        Ev.MidiNote = UGuitarSongLibrarySubsystem::ComputeMidiNote(S, Fret);
+        Ev.Velocity = FMath::Clamp(BaseVel - Idx * 0.03f, 0.25f, 1.0f);
+        Ev.LeftFinger = Fingers.IsValidIndex(S - 1) ? Fingers[S - 1] : 0;
+        Ev.RightAction = bDownStrum ? EGuitarRightAction::StrumDown : EGuitarRightAction::StrumUp;
+        Ev.Articulation = EGuitarArticulation::LetRing;
+        Ev.StrumGroupId = GroupId;
+        Ev.ChordSymbol = CurrentLiveChord.Symbol;
+
+        if (Idx == 0)
+        {
+            EmitLiveNoteNow(Ev);
+        }
+        else
+        {
+            PendingLiveEvents.Add(MoveTemp(Ev));
+        }
+    }
+}
+
+void UGuitarScoreSubsystem::PluckLiveString(int32 String1To6, float Velocity)
+{
+    EnsureLiveBankInitialized();
+    if (bIsPlaying || ControlMode != EPlayControlMode::FreePlay)
+    {
+        SetControlMode(EPlayControlMode::FreePlay);
+    }
+
+    const int32 S = FMath::Clamp(String1To6, 1, 6);
+    int32 Fret = 0;
+    int32 Finger = 0;
+    if (CurrentLiveChord.Frets.IsValidIndex(S - 1) && CurrentLiveChord.Frets[S - 1] >= 0)
+    {
+        Fret = CurrentLiveChord.Frets[S - 1];
+        Finger = CurrentLiveChord.Fingers.IsValidIndex(S - 1) ? CurrentLiveChord.Fingers[S - 1] : 0;
+    }
+
+    FGuitarEvent Ev;
+    Ev.Id = ++LiveEventCounter;
+    Ev.TimeSec = LiveClockSec;
+    Ev.DurationSec = 1.75f;
+    Ev.StringIndex = S;
+    Ev.Fret = Fret;
+    Ev.MidiNote = UGuitarSongLibrarySubsystem::ComputeMidiNote(S, Fret);
+    Ev.Velocity = FMath::Clamp(Velocity, 0.2f, 1.0f);
+    Ev.LeftFinger = Finger;
+    if (S >= 5)
+    {
+        Ev.RightAction = EGuitarRightAction::PluckThumb;
+    }
+    else if (S >= 3)
+    {
+        Ev.RightAction = EGuitarRightAction::PluckIndex;
+    }
+    else if (S == 2)
+    {
+        Ev.RightAction = EGuitarRightAction::PluckMiddle;
+    }
+    else
+    {
+        Ev.RightAction = EGuitarRightAction::PluckRing;
+    }
+    Ev.Articulation = EGuitarArticulation::LetRing;
+    Ev.ChordSymbol = CurrentLiveChord.Symbol;
+
+    EmitLiveNoteNow(Ev);
+}
+
+void UGuitarScoreSubsystem::TriggerLivePercussive(float Velocity)
+{
+    EnsureLiveBankInitialized();
+    if (bIsPlaying || ControlMode != EPlayControlMode::FreePlay)
+    {
+        SetControlMode(EPlayControlMode::FreePlay);
+    }
+
+    FGuitarEvent Ev;
+    Ev.Id = ++LiveEventCounter;
+    Ev.TimeSec = LiveClockSec;
+    Ev.DurationSec = 0.16f;
+    Ev.StringIndex = 4;
+    Ev.Fret = 0;
+    Ev.MidiNote = 50;
+    Ev.Velocity = FMath::Clamp(Velocity, 0.25f, 1.0f);
+    Ev.LeftFinger = 0;
+    Ev.RightAction = EGuitarRightAction::PercussiveSlap;
+    Ev.Articulation = EGuitarArticulation::DeadNote;
+    Ev.ChordSymbol = CurrentLiveChord.Symbol;
+
+    EmitLiveNoteNow(Ev);
+}
+
+void UGuitarScoreSubsystem::EmitLiveNoteNow(const FGuitarEvent& Ev)
+{
+    // Keep only the freshest ringing voice per string in RingingLiveEvents
+    RingingLiveEvents.RemoveAll([&Ev](const FGuitarEvent& Existing)
+    {
+        return Existing.StringIndex == Ev.StringIndex;
+    });
+    RingingLiveEvents.Add(Ev);
+    OnGuitarEventTriggered.Broadcast(Ev);
+}
+
+void UGuitarScoreSubsystem::ProcessLiveEventsTick(float DeltaTime)
+{
+    LiveClockSec += DeltaTime;
+
+    for (int32 Idx = 0; Idx < PendingLiveEvents.Num();)
+    {
+        if (PendingLiveEvents[Idx].TimeSec <= LiveClockSec)
+        {
+            const FGuitarEvent Ready = PendingLiveEvents[Idx];
+            PendingLiveEvents.RemoveAt(Idx);
+            EmitLiveNoteNow(Ready);
+        }
+        else
+        {
+            ++Idx;
+        }
+    }
+
+    RingingLiveEvents.RemoveAll([this](const FGuitarEvent& Ev)
+    {
+        return (Ev.TimeSec + Ev.DurationSec) < LiveClockSec;
+    });
 }
