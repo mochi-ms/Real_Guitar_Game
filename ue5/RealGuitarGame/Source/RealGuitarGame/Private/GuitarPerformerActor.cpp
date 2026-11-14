@@ -2,13 +2,15 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "GuitarAudioMetaSoundBridge.h"
 #include "GuitarFretboardComponent.h"
 #include "GuitarStringVisualComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 AGuitarPerformerActor::AGuitarPerformerActor()
 {
-    PrimaryActorTick.bCanEverTick = false;
+    PrimaryActorTick.bCanEverTick = true;
 
     Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
     SetRootComponent(Root);
@@ -16,9 +18,10 @@ AGuitarPerformerActor::AGuitarPerformerActor()
     GuitarMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("GuitarMesh"));
     GuitarMesh->SetupAttachment(Root);
 
-    // Fretboard nut origin attached to guitar mesh
+    // Fretboard nut origin attached to guitar mesh, raised slightly to string top height (+0.35cm)
     Fretboard = CreateDefaultSubobject<UGuitarFretboardComponent>(TEXT("Fretboard"));
     Fretboard->SetupAttachment(GuitarMesh);
+    Fretboard->SetRelativeLocation(FVector(0.0f, 0.0f, 0.35f));
 
     StringVisuals = CreateDefaultSubobject<UGuitarStringVisualComponent>(TEXT("StringVisuals"));
     AudioBridge = CreateDefaultSubobject<UGuitarAudioMetaSoundBridge>(TEXT("AudioBridge"));
@@ -49,6 +52,23 @@ void AGuitarPerformerActor::BeginPlay()
 {
     Super::BeginPlay();
 
+    if (GuitarMesh && !GuitarMesh->GetStaticMesh())
+    {
+        UStaticMesh* RefGuitar = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Models/AcousticGuitar_Full/StaticMeshes/AcousticGuitar_Full.AcousticGuitar_Full"));
+        if (!RefGuitar)
+        {
+            RefGuitar = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Models/AcousticGuitar_Full.AcousticGuitar_Full"));
+        }
+        if (!RefGuitar)
+        {
+            RefGuitar = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Models/AcousticGuitar_Reference.AcousticGuitar_Reference"));
+        }
+        if (RefGuitar)
+        {
+            GuitarMesh->SetStaticMesh(RefGuitar);
+        }
+    }
+
     if (GuitarMesh && StringVisuals)
     {
         const int32 NumMats = GuitarMesh->GetNumMaterials();
@@ -57,7 +77,75 @@ void AGuitarPerformerActor::BeginPlay()
             StringVisuals->RegisterStringMesh(GuitarMesh, i);
         }
     }
+
+    if (bShowVirtualHands)
+    {
+        if (UStaticMesh* SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere")))
+        {
+            for (int32 i = 0; i < 4; ++i)
+            {
+                const FName FingerName(*FString::Printf(TEXT("LeftFinger_%d"), i + 1));
+                UStaticMeshComponent* FingerComp = NewObject<UStaticMeshComponent>(this, FingerName);
+                if (FingerComp)
+                {
+                    FingerComp->SetStaticMesh(SphereMesh);
+                    FingerComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                    FingerComp->SetRelativeScale3D(FVector(0.015f, 0.015f, 0.015f));
+                    FingerComp->SetupAttachment(Root);
+                    FingerComp->RegisterComponent();
+                    if (UMaterialInstanceDynamic* Mat = FingerComp->CreateDynamicMaterialInstance(0))
+                    {
+                        Mat->SetVectorParameterValue(TEXT("BaseColor"), FLinearColor(0.95f, 0.84f, 0.68f, 1.0f));
+                    }
+                    LeftFingerVisuals.Add(FingerComp);
+                }
+            }
+
+            RightPickVisual = NewObject<UStaticMeshComponent>(this, TEXT("RightPickVisual"));
+            if (RightPickVisual)
+            {
+                RightPickVisual->SetStaticMesh(SphereMesh);
+                RightPickVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                RightPickVisual->SetRelativeScale3D(FVector(0.022f, 0.016f, 0.006f));
+                RightPickVisual->SetupAttachment(Root);
+                RightPickVisual->RegisterComponent();
+                if (UMaterialInstanceDynamic* PickMat = RightPickVisual->CreateDynamicMaterialInstance(0))
+                {
+                    PickMat->SetVectorParameterValue(TEXT("BaseColor"), FLinearColor(0.88f, 0.56f, 0.24f, 1.0f));
+                }
+            }
+        }
+    }
+
     SetActiveCameraAngle(CurrentCameraAngle);
+}
+
+void AGuitarPerformerActor::Tick(float DeltaTime)
+{
+    Super::Tick(DeltaTime);
+
+    if (!bShowVirtualHands || !Fretboard)
+    {
+        return;
+    }
+
+    const FGuitarHandIKTargets& Targets = Fretboard->GetSmoothedHandIKTargets();
+    for (int32 i = 0; i < LeftFingerVisuals.Num(); ++i)
+    {
+        UStaticMeshComponent* Comp = LeftFingerVisuals[i];
+        if (!Comp || !Targets.LeftFingerWorldTargets.IsValidIndex(i))
+        {
+            continue;
+        }
+        Comp->SetWorldLocation(Targets.LeftFingerWorldTargets[i]);
+        const bool bActive = Targets.LeftFingerActive.IsValidIndex(i) && Targets.LeftFingerActive[i];
+        Comp->SetRelativeScale3D(bActive ? FVector(0.017f) : FVector(0.010f));
+    }
+
+    if (RightPickVisual)
+    {
+        RightPickVisual->SetWorldLocation(Targets.RightHandPickTargetWorld);
+    }
 }
 
 void AGuitarPerformerActor::SetActiveCameraAngle(EGuitarCameraAngle NewAngle)

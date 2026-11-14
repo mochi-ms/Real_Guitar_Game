@@ -7,7 +7,7 @@ import unittest
 from engine.humanizer import humanize_performance
 from engine.parsers.chord_chart_parser import parse_chord_chart_data
 from engine.soundbank import export_ue5_multisample_bank
-from tools.generate_guitar_glb import export_acoustic_guitar_glb
+from tools.generate_guitar_glb import export_acoustic_guitar_combined_glb, export_acoustic_guitar_glb
 
 
 class TestAssetsAndHumanizer(unittest.TestCase):
@@ -46,6 +46,15 @@ class TestAssetsAndHumanizer(unittest.TestCase):
                 self.assertIn(f"String_{s}", mesh_names)
             self.assertIn("FretWires", mesh_names)
             self.assertIn("GuitarBody_Top", mesh_names)
+
+            full_path = Path(tmp) / "guitar_full.glb"
+            export_acoustic_guitar_combined_glb(full_path)
+            raw_full = full_path.read_bytes()
+            full_json_len, _ = struct.unpack("<II", raw_full[12:20])
+            full_gltf = json.loads(raw_full[20 : 20 + full_json_len].decode("utf-8"))
+            self.assertEqual(len(full_gltf["meshes"]), 1)
+            self.assertEqual(full_gltf["meshes"][0]["name"], "AcousticGuitar_Full")
+            self.assertGreaterEqual(len(full_gltf["meshes"][0]["primitives"]), 15)
 
     def test_multisample_bank_generation_small_range(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -346,8 +346,7 @@ def build_acoustic_guitar_parts() -> tuple[list[dict[str, object]], list[MeshPar
     return materials, parts
 
 
-def export_acoustic_guitar_glb(output_path: str | Path) -> Path:
-    """Write a binary glTF 2.0 (.glb) acoustic guitar file."""
+def _export_guitar_glb_impl(output_path: str | Path, combine_single_mesh: bool) -> Path:
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     materials, parts = build_acoustic_guitar_parts()
@@ -357,6 +356,7 @@ def export_acoustic_guitar_glb(output_path: str | Path) -> Path:
     accessors: list[dict[str, object]] = []
     meshes: list[dict[str, object]] = []
     nodes: list[dict[str, object]] = []
+    combined_primitives: list[dict[str, object]] = []
 
     def append_aligned(data: bytes) -> tuple[int, int]:
         while len(bin_buf) % 4 != 0:
@@ -423,25 +423,27 @@ def export_acoustic_guitar_glb(output_path: str | Path) -> Path:
             }
         )
 
-        meshes.append(
-            {
-                "name": part.name,
-                "primitives": [
-                    {
-                        "attributes": {"POSITION": acc_pos, "NORMAL": acc_norm},
-                        "indices": acc_idx,
-                        "material": part.material_idx,
-                    }
-                ],
-            }
-        )
-        nodes.append({"name": part.name, "mesh": part_idx})
+        prim = {
+            "attributes": {"POSITION": acc_pos, "NORMAL": acc_norm},
+            "indices": acc_idx,
+            "material": part.material_idx,
+        }
+        if combine_single_mesh:
+            combined_primitives.append(prim)
+        else:
+            meshes.append({"name": part.name, "primitives": [prim]})
+            nodes.append({"name": part.name, "mesh": part_idx})
 
     while len(bin_buf) % 4 != 0:
         bin_buf.append(0)
 
-    root_idx = len(nodes)
-    nodes.append({"name": "AcousticGuitarRoot", "children": list(range(len(parts)))})
+    if combine_single_mesh:
+        meshes.append({"name": "AcousticGuitar_Full", "primitives": combined_primitives})
+        nodes.append({"name": "AcousticGuitar_Full", "mesh": 0})
+        root_idx = 0
+    else:
+        root_idx = len(nodes)
+        nodes.append({"name": "AcousticGuitarRoot", "children": list(range(len(parts)))})
 
     gltf = {
         "asset": {"version": "2.0", "generator": "RealGuitarGame_GLBBuilder"},
@@ -468,7 +470,18 @@ def export_acoustic_guitar_glb(output_path: str | Path) -> Path:
     return out
 
 
+def export_acoustic_guitar_glb(output_path: str | Path) -> Path:
+    """Write a multi-part binary glTF 2.0 (.glb) acoustic guitar file."""
+    return _export_guitar_glb_impl(output_path, combine_single_mesh=False)
+
+
+def export_acoustic_guitar_combined_glb(output_path: str | Path) -> Path:
+    """Write a unified single-mesh, multi-material .glb acoustic guitar for UE5 StaticMesh import."""
+    return _export_guitar_glb_impl(output_path, combine_single_mesh=True)
+
+
 if __name__ == "__main__":
-    target = Path(__file__).resolve().parent.parent / "ue5" / "RealGuitarGame" / "Content" / "Models" / "AcousticGuitar_Reference.glb"
-    res = export_acoustic_guitar_glb(target)
-    print(f"[OK] Exported calibrated 3D Acoustic Guitar GLB -> {res} ({res.stat().st_size} bytes)")
+    models_dir = Path(__file__).resolve().parent.parent / "ue5" / "RealGuitarGame" / "Content" / "Models"
+    res_ref = export_acoustic_guitar_glb(models_dir / "AcousticGuitar_Reference.glb")
+    res_full = export_acoustic_guitar_combined_glb(models_dir / "AcousticGuitar_Full.glb")
+    print(f"[OK] Exported GLBs -> {res_ref.name} ({res_ref.stat().st_size} B), {res_full.name} ({res_full.stat().st_size} B)")

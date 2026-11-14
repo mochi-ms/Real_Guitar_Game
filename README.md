@@ -38,3 +38,10 @@
 .\.venv\Scripts\python.exe -m engine.preview_server
 ```
 실행 후 브라우저에서 `http://127.0.0.1:8765` 에 접속하면 `.gp5`/`.gp`/`.musicxml`/`.mid` 파일을 드래그 앤 드롭하거나 코드+주법을 직접 조합해 지판·코드 다이어그램·카메라 뷰·어쿠스틱 기타 소리를 바로 테스트할 수 있습니다.
+
+### 4. Unreal Engine 5.8.4 실행 및 씬 재생성
+```powershell
+.\.venv\Scripts\python.exe -m tools.download_cc0_assets
+& "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "ue5\RealGuitarGame\RealGuitarGame.uproject" -run=pythonscript -script="ue5\RealGuitarGame\Tools\ue5_editor_bootstrap.py" -unattended -nop4 -nosplash
+```
+이후 `ue5/RealGuitarGame/RealGuitarGame.uproject`를 UE 5.8.4로 열고 **Play(Alt+P)**를 누르면 호숫가 부두 공간(`AcousticSanctuary`)에서 1인칭 걷기(`WASD`), 벤치/의자 앉기(`[E]`), 재생(`[Space]`), 카메라 전환(`[C]`), 분위기 전환(`[T]`), HUD 숨김(`[H]`), 일시정지/환경설정(`[Esc]`)을 바로 체험할 수 있습니다.

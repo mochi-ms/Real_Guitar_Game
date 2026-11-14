@@ -16,7 +16,10 @@
 #include "GuitarPerformerActor.h"
 #include "GuitarScoreSubsystem.h"
 #include "GuitarSongLibrarySubsystem.h"
+#include "InputAction.h"
 #include "InputCoreTypes.h"
+#include "InputMappingContext.h"
+#include "InputModifiers.h"
 #include "InteractableSeatActor.h"
 #include "RealGuitarMenuWidget.h"
 
@@ -33,6 +36,7 @@ AAcousticChillCharacter::AAcousticChillCharacter()
 void AAcousticChillCharacter::BeginPlay()
 {
     Super::BeginPlay();
+    EnsureDefaultEnhancedInputSetup();
 
     if (UGameInstance* GI = GetGameInstance())
     {
@@ -119,9 +123,78 @@ void AAcousticChillCharacter::Tick(float DeltaTime)
     }
 }
 
+void AAcousticChillCharacter::EnsureDefaultEnhancedInputSetup()
+{
+    auto MakeAction = [this](TObjectPtr<UInputAction>& SlotRef, const TCHAR* Name, EInputActionValueType Type)
+    {
+        if (!SlotRef)
+        {
+            UInputAction* Action = NewObject<UInputAction>(this, Name);
+            Action->ValueType = Type;
+            SlotRef = Action;
+        }
+    };
+
+    MakeAction(MoveAction, TEXT("Runtime_IA_Move"), EInputActionValueType::Axis2D);
+    MakeAction(LookAction, TEXT("Runtime_IA_Look"), EInputActionValueType::Axis2D);
+    MakeAction(InteractAction, TEXT("Runtime_IA_Interact"), EInputActionValueType::Boolean);
+    MakeAction(TogglePlayAction, TEXT("Runtime_IA_TogglePlay"), EInputActionValueType::Boolean);
+    MakeAction(CycleCameraAction, TEXT("Runtime_IA_CycleCamera"), EInputActionValueType::Boolean);
+    MakeAction(NextSongAction, TEXT("Runtime_IA_NextSong"), EInputActionValueType::Boolean);
+    MakeAction(PauseMenuAction, TEXT("Runtime_IA_PauseMenu"), EInputActionValueType::Boolean);
+    MakeAction(ToggleHudAction, TEXT("Runtime_IA_ToggleHud"), EInputActionValueType::Boolean);
+    MakeAction(CycleMoodAction, TEXT("Runtime_IA_CycleMood"), EInputActionValueType::Boolean);
+
+    if (!DefaultMappingContext)
+    {
+        UInputMappingContext* RuntimeIMC = NewObject<UInputMappingContext>(this, TEXT("Runtime_IMC_AcousticChill"));
+
+        auto MapMoveKey = [&](FKey Key, bool bSwizzleYXZ, bool bNegate)
+        {
+            FEnhancedActionKeyMapping& Mapping = RuntimeIMC->MapKey(MoveAction, Key);
+            if (bSwizzleYXZ)
+            {
+                UInputModifierSwizzleAxis* Swizzle = NewObject<UInputModifierSwizzleAxis>(RuntimeIMC);
+                Swizzle->Order = EInputAxisSwizzle::YXZ;
+                Mapping.Modifiers.Add(Swizzle);
+            }
+            if (bNegate)
+            {
+                UInputModifierNegate* Negate = NewObject<UInputModifierNegate>(RuntimeIMC);
+                Mapping.Modifiers.Add(Negate);
+            }
+        };
+
+        MapMoveKey(EKeys::W, true, false);
+        MapMoveKey(EKeys::S, true, true);
+        MapMoveKey(EKeys::D, false, false);
+        MapMoveKey(EKeys::A, false, true);
+
+        {
+            FEnhancedActionKeyMapping& LookMapping = RuntimeIMC->MapKey(LookAction, EKeys::Mouse2D);
+            UInputModifierNegate* InvertPitchY = NewObject<UInputModifierNegate>(RuntimeIMC);
+            InvertPitchY->bX = false;
+            InvertPitchY->bY = true;
+            InvertPitchY->bZ = false;
+            LookMapping.Modifiers.Add(InvertPitchY);
+        }
+
+        RuntimeIMC->MapKey(InteractAction, EKeys::E);
+        RuntimeIMC->MapKey(TogglePlayAction, EKeys::SpaceBar);
+        RuntimeIMC->MapKey(CycleCameraAction, EKeys::C);
+        RuntimeIMC->MapKey(NextSongAction, EKeys::N);
+        RuntimeIMC->MapKey(PauseMenuAction, EKeys::Escape);
+        RuntimeIMC->MapKey(ToggleHudAction, EKeys::H);
+        RuntimeIMC->MapKey(CycleMoodAction, EKeys::T);
+
+        DefaultMappingContext = RuntimeIMC;
+    }
+}
+
 void AAcousticChillCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
+    EnsureDefaultEnhancedInputSetup();
 
     if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(PlayerInputComponent))
     {
@@ -160,39 +233,6 @@ void AAcousticChillCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
         if (CycleMoodAction)
         {
             EnhancedInput->BindAction(CycleMoodAction, ETriggerEvent::Started, this, &AAcousticChillCharacter::HandleCycleMood);
-        }
-    }
-
-    // Fallback direct bindings so core controls work immediately before InputAction assets are wired
-    if (PlayerInputComponent)
-    {
-        if (!PauseMenuAction)
-        {
-            PlayerInputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AAcousticChillCharacter::HandlePauseMenu);
-        }
-        if (!ToggleHudAction)
-        {
-            PlayerInputComponent->BindKey(EKeys::H, IE_Pressed, this, &AAcousticChillCharacter::HandleToggleHud);
-        }
-        if (!CycleMoodAction)
-        {
-            PlayerInputComponent->BindKey(EKeys::T, IE_Pressed, this, &AAcousticChillCharacter::HandleCycleMood);
-        }
-        if (!InteractAction)
-        {
-            PlayerInputComponent->BindKey(EKeys::E, IE_Pressed, this, &AAcousticChillCharacter::HandleInteract);
-        }
-        if (!TogglePlayAction)
-        {
-            PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &AAcousticChillCharacter::HandleTogglePlay);
-        }
-        if (!CycleCameraAction)
-        {
-            PlayerInputComponent->BindKey(EKeys::C, IE_Pressed, this, &AAcousticChillCharacter::HandleCycleCamera);
-        }
-        if (!NextSongAction)
-        {
-            PlayerInputComponent->BindKey(EKeys::N, IE_Pressed, this, &AAcousticChillCharacter::HandleNextSong);
         }
     }
 }

@@ -104,6 +104,7 @@ private:
     void HandleSettingsChanged(const FGuitarSettingsData& NewSettings);
 
     void ApplyControlSettings(const FGuitarSettingsData& Settings);
+    void EnsureDefaultEnhancedInputSetup();
 
     AInteractableSeatActor* FindLookedAtSeat() const;
 

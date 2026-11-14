@@ -106,11 +106,10 @@ void URealGuitarMenuWidget::BuildDefaultMenuLayout()
 
     // Top Navigation Tabs
     UHorizontalBox* TabRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    UTextBlock* UnusedTabLbl = nullptr;
-    TabMainButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabMain", "메인 · 악보"), UnusedTabLbl, true, 13);
-    TabGraphicsButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabGfx", "화면 · 그래픽"), UnusedTabLbl, false, 13);
-    TabAudioButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabAudio", "사운드 · 분위기"), UnusedTabLbl, false, 13);
-    TabControlsButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabCtrl", "조작 · 키 안내"), UnusedTabLbl, false, 13);
+    TabMainButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabMain", "메인 · 악보"), true, 13);
+    TabGraphicsButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabGfx", "화면 · 그래픽"), false, 13);
+    TabAudioButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabAudio", "사운드 · 분위기"), false, 13);
+    TabControlsButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TabCtrl", "조작 · 키 안내"), false, 13);
 
     for (UButton* TabBtn : { TabMainButton.Get(), TabGraphicsButton.Get(), TabAudioButton.Get(), TabControlsButton.Get() })
     {
@@ -140,10 +139,8 @@ void URealGuitarMenuWidget::BuildDefaultMenuLayout()
     // Footer Action Bar
     UHorizontalBox* FooterRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
     PrimaryActionButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "Resume", "계속 감상"), PrimaryActionLabel, true, 14, FMargin(22.0f, 9.0f));
-    UTextBlock* TitleLbl = nullptr;
-    BackToTitleButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "BackTitle", "타이틀 화면"), TitleLbl, false, 13);
-    UTextBlock* QuitLbl = nullptr;
-    QuitButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "Quit", "게임 종료"), QuitLbl, false, 13);
+    BackToTitleButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "BackTitle", "타이틀 화면"), false, 13);
+    QuitButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "Quit", "게임 종료"), false, 13);
 
     if (UHorizontalBoxSlot* S1 = FooterRow->AddChildToHorizontalBox(PrimaryActionButton))
     {
@@ -181,8 +178,7 @@ UWidget* URealGuitarMenuWidget::BuildMainAndSongsTab()
     );
 
     UHorizontalBox* PlaybackRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    UTextBlock* PlayLbl = nullptr;
-    SongPlayPauseButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TogglePlay", "재생 / 일시정지"), PlayLbl, true, 13);
+    SongPlayPauseButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "TogglePlay", "재생 / 일시정지"), true, 13);
     PlaybackRow->AddChildToHorizontalBox(SongPlayPauseButton);
     Box->AddChildToVerticalBox(PlaybackRow);
 
@@ -193,19 +189,16 @@ UWidget* URealGuitarMenuWidget::BuildMainAndSongsTab()
         WidgetTree, NSLOCTEXT("GuitarMenu", "SecQuickJam", "즉석 반주 패턴 (코드/아르페지오/스트로크)"), 15, GuitarUIStyle::AccentGold, true));
 
     UHorizontalBox* JamRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    UTextBlock* Lbl1 = nullptr;
-    UTextBlock* Lbl2 = nullptr;
-    UTextBlock* Lbl3 = nullptr;
-    JamBalladButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "JamBallad", "어쿠스틱 발라드 (C-G-Am-F)"), Lbl1, false, 12);
-    JamFingerButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "JamFinger", "핑거스타일 아르페지오 (D-A-Bm-G)"), Lbl2, false, 12);
-    JamPopButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "JamPop", "감성 팝 스트로크 (Em-C-G-D)"), Lbl3, false, 12);
+    JamBalladButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "JamBallad", "어쿠스틱 발라드 (C-G-Am-F)"), false, 12);
+    JamFingerButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "JamFinger", "핑거스타일 아르페지오 (D-A-Bm-G)"), false, 12);
+    JamPopButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "JamPop", "감성 팝 스트로크 (Em-C-G-D)"), false, 12);
 
     for (UButton* Btn : { JamBalladButton.Get(), JamFingerButton.Get(), JamPopButton.Get() })
     {
-        if (UHorizontalBoxSlot* Slot = JamRow->AddChildToHorizontalBox(Btn))
+        if (UHorizontalBoxSlot* HSlot = JamRow->AddChildToHorizontalBox(Btn))
         {
-            Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-            Slot->SetPadding(FMargin(0.0f, 8.0f, 8.0f, 0.0f));
+            HSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+            HSlot->SetPadding(FMargin(0.0f, 8.0f, 8.0f, 0.0f));
         }
     }
     Box->AddChildToVerticalBox(JamRow);
@@ -225,10 +218,8 @@ UWidget* URealGuitarMenuWidget::BuildGraphicsTab()
     GuitarUIStyle::AddCheckBoxRow(WidgetTree, Box, NSLOCTEXT("GuitarMenu", "Lumen", "Lumen 전역 조명 & 반사 활성화"), LumenCheckBox);
 
     UHorizontalBox* ActionRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    UTextBlock* ApplyLbl = nullptr;
-    UTextBlock* ResetLbl = nullptr;
-    ApplyGraphicsButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "ApplyGfx", "그래픽 적용 및 저장"), ApplyLbl, true, 13);
-    ResetDefaultsButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "ResetDef", "기본값 복원"), ResetLbl, false, 13);
+    ApplyGraphicsButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "ApplyGfx", "그래픽 적용 및 저장"), true, 13);
+    ResetDefaultsButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "ResetDef", "기본값 복원"), false, 13);
 
     if (UHorizontalBoxSlot* S1 = ActionRow->AddChildToHorizontalBox(ApplyGraphicsButton))
     {
@@ -260,21 +251,17 @@ UWidget* URealGuitarMenuWidget::BuildAudioAndMoodTab()
     Box->AddChildToVerticalBox(CurrentMoodLabel);
 
     UHorizontalBox* MoodRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-    UTextBlock* M1 = nullptr;
-    UTextBlock* M2 = nullptr;
-    UTextBlock* M3 = nullptr;
-    UTextBlock* M4 = nullptr;
-    MoodSunsetButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodSunset", "황금빛 노을"), M1, false, 12);
-    MoodNightButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodNight", "아늑한 밤 램프"), M2, false, 12);
-    MoodMorningButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodMorn", "아침 물안개"), M3, false, 12);
-    MoodRainButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodRain", "비 오는 로파이"), M4, false, 12);
+    MoodSunsetButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodSunset", "황금빛 노을"), false, 12);
+    MoodNightButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodNight", "아늑한 밤 램프"), false, 12);
+    MoodMorningButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodMorn", "아침 물안개"), false, 12);
+    MoodRainButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarMenu", "MoodRain", "비 오는 로파이"), false, 12);
 
     for (UButton* Btn : { MoodSunsetButton.Get(), MoodNightButton.Get(), MoodMorningButton.Get(), MoodRainButton.Get() })
     {
-        if (UHorizontalBoxSlot* Slot = MoodRow->AddChildToHorizontalBox(Btn))
+        if (UHorizontalBoxSlot* HSlot = MoodRow->AddChildToHorizontalBox(Btn))
         {
-            Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-            Slot->SetPadding(FMargin(0.0f, 6.0f, 6.0f, 6.0f));
+            HSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+            HSlot->SetPadding(FMargin(0.0f, 6.0f, 6.0f, 6.0f));
         }
     }
     Box->AddChildToVerticalBox(MoodRow);

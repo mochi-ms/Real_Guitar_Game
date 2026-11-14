@@ -30,6 +30,11 @@ class REALGUITARGAME_API AGuitarPerformerActor : public AActor
 public:
     AGuitarPerformerActor();
 
+    virtual void Tick(float DeltaTime) override;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Guitar|Visual")
+    bool bShowVirtualHands = true;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Guitar")
     TObjectPtr<USceneComponent> Root;
 
@@ -70,5 +75,11 @@ protected:
     virtual void BeginPlay() override;
 
 private:
+    UPROPERTY(Transient)
+    TArray<TObjectPtr<UStaticMeshComponent>> LeftFingerVisuals;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UStaticMeshComponent> RightPickVisual;
+
     EGuitarCameraAngle CurrentCameraAngle = EGuitarCameraAngle::Overview;
 };

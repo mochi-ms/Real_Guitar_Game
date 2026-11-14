@@ -55,7 +55,7 @@ UBorder* GuitarUIStyle::MakeGlassCard(
 UButton* GuitarUIStyle::MakeButton(
     UWidgetTree* Tree,
     const FText& Label,
-    UTextBlock*& OutLabelText,
+    TObjectPtr<UTextBlock>& OutLabelText,
     bool bPrimaryAccent,
     int32 FontSize,
     FMargin ContentPadding
@@ -70,12 +70,25 @@ UButton* GuitarUIStyle::MakeButton(
     InnerPad->SetHorizontalAlignment(HAlign_Center);
     InnerPad->SetVerticalAlignment(VAlign_Center);
 
-    OutLabelText = MakeText(Tree, Label, FontSize, TextPrimary, bPrimaryAccent);
-    OutLabelText->SetJustification(ETextJustify::Center);
-    InnerPad->SetContent(OutLabelText);
+    UTextBlock* LabelTB = MakeText(Tree, Label, FontSize, TextPrimary, bPrimaryAccent);
+    LabelTB->SetJustification(ETextJustify::Center);
+    OutLabelText = LabelTB;
+    InnerPad->SetContent(LabelTB);
 
     Button->SetContent(InnerPad);
     return Button;
+}
+
+UButton* GuitarUIStyle::MakeSimpleButton(
+    UWidgetTree* Tree,
+    const FText& Label,
+    bool bPrimaryAccent,
+    int32 FontSize,
+    FMargin ContentPadding
+)
+{
+    TObjectPtr<UTextBlock> UnusedLabel;
+    return MakeButton(Tree, Label, UnusedLabel, bPrimaryAccent, FontSize, ContentPadding);
 }
 
 USlider* GuitarUIStyle::MakeStyledSlider(
@@ -101,8 +114,8 @@ UHorizontalBox* GuitarUIStyle::AddSettingSliderRow(
     float MinVal,
     float MaxVal,
     float StepSize,
-    USlider*& OutSlider,
-    UTextBlock*& OutValueText
+    TObjectPtr<USlider>& OutSlider,
+    TObjectPtr<UTextBlock>& OutValueText
 )
 {
     UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
@@ -114,8 +127,9 @@ UHorizontalBox* GuitarUIStyle::AddSettingSliderRow(
         LabelSlot->SetVerticalAlignment(VAlign_Center);
     }
 
-    OutSlider = MakeStyledSlider(Tree, MinVal, MaxVal, StepSize);
-    if (UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(OutSlider))
+    USlider* Slider = MakeStyledSlider(Tree, MinVal, MaxVal, StepSize);
+    OutSlider = Slider;
+    if (UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(Slider))
     {
         FSlateChildSize Fill(ESlateSizeRule::Fill);
         Fill.Value = 1.25f;
@@ -124,10 +138,11 @@ UHorizontalBox* GuitarUIStyle::AddSettingSliderRow(
         SliderSlot->SetPadding(FMargin(12.0f, 0.0f));
     }
 
-    OutValueText = MakeText(Tree, FText::FromString(TEXT("0%")), 13, AccentGold, true);
-    OutValueText->SetMinDesiredWidth(64.0f);
-    OutValueText->SetJustification(ETextJustify::Right);
-    if (UHorizontalBoxSlot* ValSlot = Row->AddChildToHorizontalBox(OutValueText))
+    UTextBlock* ValueTB = MakeText(Tree, FText::FromString(TEXT("0%")), 13, AccentGold, true);
+    ValueTB->SetMinDesiredWidth(64.0f);
+    ValueTB->SetJustification(ETextJustify::Right);
+    OutValueText = ValueTB;
+    if (UHorizontalBoxSlot* ValSlot = Row->AddChildToHorizontalBox(ValueTB))
     {
         ValSlot->SetVerticalAlignment(VAlign_Center);
     }
@@ -143,9 +158,9 @@ UHorizontalBox* GuitarUIStyle::AddStepperRow(
     UWidgetTree* Tree,
     UVerticalBox* ParentBox,
     const FText& Label,
-    UButton*& OutPrevButton,
-    UTextBlock*& OutValueText,
-    UButton*& OutNextButton
+    TObjectPtr<UButton>& OutPrevButton,
+    TObjectPtr<UTextBlock>& OutValueText,
+    TObjectPtr<UButton>& OutNextButton
 )
 {
     UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
@@ -157,22 +172,23 @@ UHorizontalBox* GuitarUIStyle::AddStepperRow(
         LabelSlot->SetVerticalAlignment(VAlign_Center);
     }
 
-    UTextBlock* UnusedPrevLabel = nullptr;
-    OutPrevButton = MakeButton(Tree, FText::FromString(TEXT("<")), UnusedPrevLabel, false, 13, FMargin(10.0f, 4.0f));
-    Row->AddChildToHorizontalBox(OutPrevButton);
+    UButton* PrevBtn = MakeSimpleButton(Tree, FText::FromString(TEXT("<")), false, 13, FMargin(10.0f, 4.0f));
+    OutPrevButton = PrevBtn;
+    Row->AddChildToHorizontalBox(PrevBtn);
 
-    OutValueText = MakeText(Tree, FText::FromString(TEXT("-")), 14, AccentGold, true);
-    OutValueText->SetMinDesiredWidth(210.0f);
-    OutValueText->SetJustification(ETextJustify::Center);
-    if (UHorizontalBoxSlot* ValSlot = Row->AddChildToHorizontalBox(OutValueText))
+    UTextBlock* ValueTB = MakeText(Tree, FText::FromString(TEXT("-")), 14, AccentGold, true);
+    ValueTB->SetMinDesiredWidth(210.0f);
+    ValueTB->SetJustification(ETextJustify::Center);
+    OutValueText = ValueTB;
+    if (UHorizontalBoxSlot* ValSlot = Row->AddChildToHorizontalBox(ValueTB))
     {
         ValSlot->SetVerticalAlignment(VAlign_Center);
         ValSlot->SetPadding(FMargin(8.0f, 0.0f));
     }
 
-    UTextBlock* UnusedNextLabel = nullptr;
-    OutNextButton = MakeButton(Tree, FText::FromString(TEXT(">")), UnusedNextLabel, false, 13, FMargin(10.0f, 4.0f));
-    Row->AddChildToHorizontalBox(OutNextButton);
+    UButton* NextBtn = MakeSimpleButton(Tree, FText::FromString(TEXT(">")), false, 13, FMargin(10.0f, 4.0f));
+    OutNextButton = NextBtn;
+    Row->AddChildToHorizontalBox(NextBtn);
 
     if (UVerticalBoxSlot* VSlot = ParentBox->AddChildToVerticalBox(Row))
     {
@@ -185,7 +201,7 @@ UHorizontalBox* GuitarUIStyle::AddCheckBoxRow(
     UWidgetTree* Tree,
     UVerticalBox* ParentBox,
     const FText& Label,
-    UCheckBox*& OutCheckBox
+    TObjectPtr<UCheckBox>& OutCheckBox
 )
 {
     UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
@@ -197,8 +213,9 @@ UHorizontalBox* GuitarUIStyle::AddCheckBoxRow(
         LabelSlot->SetVerticalAlignment(VAlign_Center);
     }
 
-    OutCheckBox = Tree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass());
-    if (UHorizontalBoxSlot* CheckSlot = Row->AddChildToHorizontalBox(OutCheckBox))
+    UCheckBox* Check = Tree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass());
+    OutCheckBox = Check;
+    if (UHorizontalBoxSlot* CheckSlot = Row->AddChildToHorizontalBox(Check))
     {
         CheckSlot->SetVerticalAlignment(VAlign_Center);
         CheckSlot->SetPadding(FMargin(10.0f, 0.0f, 4.0f, 0.0f));

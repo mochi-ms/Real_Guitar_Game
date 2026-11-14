@@ -65,11 +65,11 @@ void UGuitarPerformanceHUDWidget::BuildDefaultHUDLayout()
         UBorder* TopLeftCard = GuitarUIStyle::MakeGlassCard(WidgetTree, TopLeftVBox, FMargin(16.0f, 10.0f));
         TopHeaderBadgeRoot = TopLeftCard;
 
-        if (UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(TopLeftCard))
+        if (UCanvasPanelSlot* CanvasSlot = RootCanvas->AddChildToCanvas(TopLeftCard))
         {
-            Slot->SetAnchors(FAnchors(0.0f, 0.0f));
-            Slot->SetOffsets(FMargin(28.0f, 24.0f, 0.0f, 0.0f));
-            Slot->SetAutoSize(true);
+            CanvasSlot->SetAnchors(FAnchors(0.0f, 0.0f));
+            CanvasSlot->SetOffsets(FMargin(28.0f, 24.0f, 0.0f, 0.0f));
+            CanvasSlot->SetAutoSize(true);
         }
     }
 
@@ -104,12 +104,12 @@ void UGuitarPerformanceHUDWidget::BuildDefaultHUDLayout()
         UBorder* TopRightCard = GuitarUIStyle::MakeGlassCard(WidgetTree, TopRightVBox, FMargin(18.0f, 12.0f));
         ChordCardRoot = TopRightCard;
 
-        if (UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(TopRightCard))
+        if (UCanvasPanelSlot* CanvasSlot = RootCanvas->AddChildToCanvas(TopRightCard))
         {
-            Slot->SetAnchors(FAnchors(1.0f, 0.0f));
-            Slot->SetAlignment(FVector2D(1.0f, 0.0f));
-            Slot->SetOffsets(FMargin(-28.0f, 24.0f, 0.0f, 0.0f));
-            Slot->SetAutoSize(true);
+            CanvasSlot->SetAnchors(FAnchors(1.0f, 0.0f));
+            CanvasSlot->SetAlignment(FVector2D(1.0f, 0.0f));
+            CanvasSlot->SetOffsets(FMargin(-28.0f, 24.0f, 0.0f, 0.0f));
+            CanvasSlot->SetAutoSize(true);
         }
     }
 
@@ -125,12 +125,12 @@ void UGuitarPerformanceHUDWidget::BuildDefaultHUDLayout()
         UBorder* PromptCard = GuitarUIStyle::MakeGlassCard(WidgetTree, InteractionPromptText, FMargin(22.0f, 10.0f), GuitarUIStyle::CardSurface);
         InteractionPromptPill = PromptCard;
 
-        if (UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(PromptCard))
+        if (UCanvasPanelSlot* CanvasSlot = RootCanvas->AddChildToCanvas(PromptCard))
         {
-            Slot->SetAnchors(FAnchors(0.5f, 1.0f));
-            Slot->SetAlignment(FVector2D(0.5f, 1.0f));
-            Slot->SetOffsets(FMargin(0.0f, -155.0f, 0.0f, 0.0f));
-            Slot->SetAutoSize(true);
+            CanvasSlot->SetAnchors(FAnchors(0.5f, 1.0f));
+            CanvasSlot->SetAlignment(FVector2D(0.5f, 1.0f));
+            CanvasSlot->SetOffsets(FMargin(0.0f, -155.0f, 0.0f, 0.0f));
+            CanvasSlot->SetAutoSize(true);
         }
     }
 
@@ -166,26 +166,21 @@ void UGuitarPerformanceHUDWidget::BuildDefaultHUDLayout()
         // Row B: Buttons & Tempo Slider
         UHorizontalBox* ControlsRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 
-        UTextBlock* PrevLbl = nullptr;
-        PrevSongButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Prev", "|< 이전 곡"), PrevLbl, false, 12);
+        PrevSongButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Prev", "|< 이전 곡"), false, 12);
         PlayPauseButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Play", "▶ 재생"), PlayPauseButtonLabel, true, 13);
-        UTextBlock* NextLbl = nullptr;
-        NextSongButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Next", "다음 곡 >|"), NextLbl, false, 12);
-        UTextBlock* CamLbl = nullptr;
-        CameraCycleButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Cam", "카메라 [C]"), CamLbl, false, 12);
-        UTextBlock* MoodLbl = nullptr;
-        MoodCycleButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Mood", "분위기 [T]"), MoodLbl, false, 12);
-        UTextBlock* SetLbl = nullptr;
-        OpenSettingsButton = GuitarUIStyle::MakeButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Settings", "설정 [ESC]"), SetLbl, false, 12);
+        NextSongButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Next", "다음 곡 >|"), false, 12);
+        CameraCycleButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Cam", "카메라 [C]"), false, 12);
+        MoodCycleButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Mood", "분위기 [T]"), false, 12);
+        OpenSettingsButton = GuitarUIStyle::MakeSimpleButton(WidgetTree, NSLOCTEXT("GuitarHUD", "Settings", "설정 [ESC]"), false, 12);
 
         PlaybackRateSlider = GuitarUIStyle::MakeStyledSlider(WidgetTree, 0.5f, 1.5f, 0.05f);
 
         auto AddBtn = [&](UButton* Btn)
         {
-            if (UHorizontalBoxSlot* Slot = ControlsRow->AddChildToHorizontalBox(Btn))
+            if (UHorizontalBoxSlot* HSlot = ControlsRow->AddChildToHorizontalBox(Btn))
             {
-                Slot->SetVerticalAlignment(VAlign_Center);
-                Slot->SetPadding(FMargin(4.0f, 0.0f));
+                HSlot->SetVerticalAlignment(VAlign_Center);
+                HSlot->SetPadding(FMargin(4.0f, 0.0f));
             }
         };
 
@@ -209,12 +204,12 @@ void UGuitarPerformanceHUDWidget::BuildDefaultHUDLayout()
         UBorder* DockCard = GuitarUIStyle::MakeGlassCard(WidgetTree, DockVBox, FMargin(20.0f, 12.0f));
         SeatedControlBarRoot = DockCard;
 
-        if (UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(DockCard))
+        if (UCanvasPanelSlot* CanvasSlot = RootCanvas->AddChildToCanvas(DockCard))
         {
-            Slot->SetAnchors(FAnchors(0.5f, 1.0f));
-            Slot->SetAlignment(FVector2D(0.5f, 1.0f));
-            Slot->SetOffsets(FMargin(0.0f, -24.0f, 820.0f, 0.0f));
-            Slot->SetAutoSize(true);
+            CanvasSlot->SetAnchors(FAnchors(0.5f, 1.0f));
+            CanvasSlot->SetAlignment(FVector2D(0.5f, 1.0f));
+            CanvasSlot->SetOffsets(FMargin(0.0f, -24.0f, 820.0f, 0.0f));
+            CanvasSlot->SetAutoSize(true);
         }
     }
 }

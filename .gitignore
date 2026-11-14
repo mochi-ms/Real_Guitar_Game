@@ -25,6 +25,9 @@ ue5/*/Content/Megascans/
 ue5/*/Content/MetaHumans/
 ue5/*/Content/ExternalAssets/
 ue5/*/Content/Audio/Samples/*.wav
+ue5/*/Content/Audio/Samples/*.uasset
+ue5/*/Content/Models/Props/
+ue5/*/Content/Models/AcousticGuitar_Reference/
 
 # IDE & OS
 .vscode/

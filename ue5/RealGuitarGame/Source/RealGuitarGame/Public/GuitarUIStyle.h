@@ -1,15 +1,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/ObjectPtr.h"
 
 class UBorder;
 class UButton;
 class UCheckBox;
 class UHorizontalBox;
 class UPanelWidget;
-class UProgressBar;
 class USlider;
-class USpacer;
 class UTextBlock;
 class UVerticalBox;
 class UWidget;
@@ -44,7 +43,15 @@ namespace GuitarUIStyle
     UButton* MakeButton(
         UWidgetTree* Tree,
         const FText& Label,
-        UTextBlock*& OutLabelText,
+        TObjectPtr<UTextBlock>& OutLabelText,
+        bool bPrimaryAccent = false,
+        int32 FontSize = 13,
+        FMargin ContentPadding = FMargin(14.0f, 7.0f)
+    );
+
+    UButton* MakeSimpleButton(
+        UWidgetTree* Tree,
+        const FText& Label,
         bool bPrimaryAccent = false,
         int32 FontSize = 13,
         FMargin ContentPadding = FMargin(14.0f, 7.0f)
@@ -64,24 +71,24 @@ namespace GuitarUIStyle
         float MinVal,
         float MaxVal,
         float StepSize,
-        USlider*& OutSlider,
-        UTextBlock*& OutValueText
+        TObjectPtr<USlider>& OutSlider,
+        TObjectPtr<UTextBlock>& OutValueText
     );
 
     UHorizontalBox* AddStepperRow(
         UWidgetTree* Tree,
         UVerticalBox* ParentBox,
         const FText& Label,
-        UButton*& OutPrevButton,
-        UTextBlock*& OutValueText,
-        UButton*& OutNextButton
+        TObjectPtr<UButton>& OutPrevButton,
+        TObjectPtr<UTextBlock>& OutValueText,
+        TObjectPtr<UButton>& OutNextButton
     );
 
     UHorizontalBox* AddCheckBoxRow(
         UWidgetTree* Tree,
         UVerticalBox* ParentBox,
         const FText& Label,
-        UCheckBox*& OutCheckBox
+        TObjectPtr<UCheckBox>& OutCheckBox
     );
 
     void AddSpacer(UWidgetTree* Tree, UPanelWidget* ParentBox, float Width, float Height);
